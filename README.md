@@ -103,19 +103,6 @@ npx expo start
 
 Abra no emulador Android, simulador iOS ou via Expo Go no seu dispositivo físico.
 
----
-
-## 📸 Screenshots (sugerido)
-
-Inclua aqui prints do app, por exemplo:
-
-- Lista de produtos
-- Detalhe de produto
-- Carrinho
-- Tela de pagamento
-- Histórico de pedidos
-
----
 
 ## 📂 Estrutura básica de pastas
 
@@ -150,4 +137,4 @@ Ele demonstra sua capacidade de:
 
 ## 👤 Autor
 
-Desenvolvido por **Lucas** como parte de uma aplicação full stack (backend + web + mobile), com foco em boas práticas, arquitetura organizada e integração real com meios de pagamento.
+Desenvolvido por **Lucas Liaw** como parte de uma aplicação full stack (backend + web + mobile), com foco em boas práticas, arquitetura organizada e integração real com meios de pagamento.
