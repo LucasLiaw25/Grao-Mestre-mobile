@@ -1,50 +1,153 @@
-# Welcome to your Expo app 👋
+# 📱 Grão Mestre – App Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo mobile do ecossistema **Grão Mestre**, uma plataforma completa para venda e gestão de cafés especiais.  
+Este app é focado na experiência do cliente final: explorar produtos, montar pedidos, pagar via Mercado Pago e acompanhar o status em tempo real.
 
-## Get started
+---
 
-1. Install dependencies
+## ✨ Principais funcionalidades
 
-   ```bash
-   npm install
-   ```
+- **Catálogo de produtos**
+  - Listagem de cafés com imagem, descrição, preço e categoria.
+  - Tela de detalhes com informações completas do produto.
 
-2. Start the app
+- **Carrinho e pedidos**
+  - Adição/remoção de itens, atualização de quantidade.
+  - Criação de pedidos integrados à API (mesmo backend do web).
+  - Consulta de histórico de pedidos e status em tempo real.
 
-   ```bash
-   npx expo start
-   ```
+- **Pagamentos**
+  - Integração com **Mercado Pago** usando o fluxo definido pelo backend.
+  - Telas de acompanhamento de pagamento (pendente, sucesso, erro).
 
-In the output, you'll find options to open the app in a
+- **Autenticação e conta**
+  - Login, registro de novos usuários e ativação de conta.
+  - Esqueci minha senha / redefinição de senha com token.
+  - Tela de conta com informações básicas do usuário.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **Endereços**
+  - Cadastro, edição e definição de endereço padrão.
+  - Validação básica de CEP e campos obrigatórios.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Experiência de uso**
+  - Layout responsivo adaptado para iOS e Android.
+  - Feedbacks com toasts, loaders e estados vazios bem trabalhados.
+  - Navegação em pilha e abas (stack/tab navigation).
 
-## Get a fresh project
+---
 
-When you're ready, run:
+## 🛠️ Stack Tecnológica
+
+- **Framework:** React Native (Expo)
+- **Linguagem:** TypeScript
+- **Navegação:** React Navigation
+- **Estado / Dados:**
+  - Consumo de API REST do backend em Spring Boot
+  - Armazenamento local para sessão/token (quando aplicável)
+- **UI/UX:**
+  - Componentização de botões, inputs, cards e layouts
+  - Ícones (Lucide/Vector Icons, conforme o projeto)
+  - Estilização consistente com a identidade do Grão Mestre (tipografia, cores, etc.)
+
+---
+
+## 🔗 Integração com o backend
+
+Este app consome a mesma API do backend do projeto:
+
+- Autenticação via JWT
+- Endpoints de:
+  - `/api/products` – catálogo de produtos
+  - `/api/orders` – criação e consulta de pedidos
+  - `/api/users` – registro, login, recuperação de senha
+  - `/api/addresses` – gerenciamento de endereços
+- Integração com **Mercado Pago** mediada pelo backend, incluindo:
+  - Criação de preferência de pagamento
+  - Webhook de confirmação
+  - Rotas de redirecionamento (success / failure / pending)
+
+> A URL base da API e as chaves sensíveis devem ser configuradas via variáveis de ambiente (ex.: `.env` no Expo).
+
+---
+
+## 🚀 Como rodar o app
+
+1. **Clonar o repositório**
 
 ```bash
-npm run reset-project
+git clone https://github.com/seu-usuario/grao-mestre-mobile.git
+cd grao-mestre-mobile
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. **Instalar dependências**
 
-## Learn more
+```bash
+npm install
+# ou
+yarn install
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. **Configurar variáveis de ambiente**
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Crie um arquivo `.env` na raiz com algo como:
 
-## Join the community
+```env
+API_BASE_URL=https://sua-api.com
+```
 
-Join our community of developers creating universal apps.
+4. **Executar em desenvolvimento**
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start
+```
+
+Abra no emulador Android, simulador iOS ou via Expo Go no seu dispositivo físico.
+
+---
+
+## 📸 Screenshots (sugerido)
+
+Inclua aqui prints do app, por exemplo:
+
+- Lista de produtos
+- Detalhe de produto
+- Carrinho
+- Tela de pagamento
+- Histórico de pedidos
+
+---
+
+## 📂 Estrutura básica de pastas
+
+```text
+src/
+  api/           # Configuração do cliente HTTP e serviços
+  screens/       # Telas (Home, Products, ProductDetail, Cart, Orders, Account...)
+  components/    # Componentes reutilizáveis (Button, Card, etc.)
+  hooks/         # Hooks personalizados
+  navigation/    # Stack/Tab navigators
+  types/         # Tipos/DTOs compartilhados com backend
+  config/        # Configuração de tema, constantes, etc.
+```
+
+---
+
+## 🧩 Papel no ecossistema
+
+O app mobile é um dos três pilares do projeto **Grão Mestre**:
+
+- **Backend** – API REST em Spring Boot (auth, pedidos, pagamentos, relatórios).
+- **Frontend Web** – loja + painel administrativo.
+- **Mobile** – experiência de compra e acompanhamento de pedidos para o cliente final.
+
+Ele demonstra sua capacidade de:
+
+- Consumir APIs complexas
+- Trabalhar com fluxo de autenticação e pagamento
+- Criar experiências mobile de qualidade em cima de um domínio real (e-commerce de cafés especiais).
+
+---
+
+## 👤 Autor
+
+Desenvolvido por **Lucas** como parte de uma aplicação full stack (backend + web + mobile), com foco em boas práticas, arquitetura organizada e integração real com meios de pagamento.
