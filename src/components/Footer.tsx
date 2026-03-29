@@ -1,63 +1,70 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Text, Divider } from 'react-native-paper';
+import { Instagram, Facebook, Twitter, Coffee } from 'lucide-react-native';
+
+const COLORS = {
+  bg: '#1c1917', // Stone 900 (Combinando com seu style Old Money)
+  text: '#F5F5F5',
+  muted: 'rgba(245, 245, 245, 0.6)',
+  accent: '#9A5B32', // Marrom da marca
+  border: 'rgba(245, 245, 245, 0.1)',
+};
 
 export function Footer() {
-  const { width } = useWindowDimensions(); 
-  const isLargeScreen = width >= 768; 
-  const handleLinkPress = (path: string) => {
-    console.log(`Navegando para: ${path}`);
-  };
+  const currentYear = new Date().getFullYear();
 
   return (
     <View style={styles.footer}>
-      <View style={[styles.container, !isLargeScreen && styles.containerMobile]}>
-        <View style={[styles.grid, !isLargeScreen && styles.gridMobile]}>
-          <View style={[styles.brandSection, isLargeScreen && styles.brandSectionLarge]}>
-            <Text style={styles.brandTitle}>Grão Mestre.</Text>
-            <Text style={styles.brandDescription}>
-              Elevating the daily ritual. We source, roast, and deliver the world's most extraordinary coffees, directly to your door.
-            </Text>
+      <View style={styles.container}>
+        {/* Brand & Socials - Lado a Lado para economizar altura */}
+        <View style={styles.topRow}>
+          <View>
+            <Text style={styles.brand}>Grão Mestre.</Text>
+            <Text style={styles.tagline}>The art of roasting.</Text>
           </View>
-          <View style={[styles.sectionColumn, !isLargeScreen && styles.sectionColumnMobile]}>
-            <Text style={styles.sectionTitle}>Shop</Text>
-            <View style={styles.list}>
-              <TouchableOpacity onPress={() => handleLinkPress("/products")} style={styles.listItem}>
-                <Text style={styles.linkText}>All Products</Text>
+
+          <View style={styles.socialGroup}>
+            {[Instagram, Facebook, Twitter].map((Icon, i) => (
+              <TouchableOpacity key={i} style={styles.socialBtn}>
+                <Icon size={20} color={COLORS.muted} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleLinkPress("/products")} style={styles.listItem}>
-                <Text style={styles.linkText}>Single Origin</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleLinkPress("/products")} style={styles.listItem}>
-                <Text style={styles.linkText}>Blends</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          <View style={[styles.sectionColumn, !isLargeScreen && styles.sectionColumnMobile]}>
-            <Text style={styles.sectionTitle}>Company</Text>
-            <View style={styles.list}>
-              <TouchableOpacity onPress={() => handleLinkPress("/our-story")} style={styles.listItem}>
-                <Text style={styles.linkText}>Our Story</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleLinkPress("/sustainability")} style={styles.listItem}>
-                <Text style={styles.linkText}>Sustainability</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleLinkPress("/contact")} style={styles.listItem}>
-                <Text style={styles.linkText}>Contact</Text>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
         </View>
-        <View style={[styles.bottomSection, isLargeScreen && styles.bottomSectionLarge]}>
-          <Text style={styles.copyrightText}>
-            © {new Date().getFullYear()} Grão Mestre. All rights reserved.
+
+        <Divider style={styles.divider} />
+
+        {/* Links Rápidos - Grid de 2 colunas para ser compacto */}
+        <View style={styles.linkGrid}>
+          <View style={styles.column}>
+            <Text style={styles.columnTitle}>Shop</Text>
+            {['All Products', 'Single Origin', 'Blends'].map((item) => (
+              <TouchableOpacity key={item} style={styles.linkItem}>
+                <Text style={styles.linkText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.column}>
+            <Text style={styles.columnTitle}>Company</Text>
+            {['Our Story', 'Sustainability', 'Contact'].map((item) => (
+              <TouchableOpacity key={item} style={styles.linkItem}>
+                <Text style={styles.linkText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Bottom Section - Minimalista */}
+        <View style={styles.bottomBar}>
+          <Text style={styles.copyright}>
+            © {currentYear} Grão Mestre
           </Text>
-          <View style={styles.bottomLinks}>
-            <TouchableOpacity onPress={() => handleLinkPress("/privacy-policy")}>
-              <Text style={styles.bottomLinkText}>Privacy Policy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleLinkPress("/terms-of-service")}>
-              <Text style={styles.bottomLinkText}>Terms of Service</Text>
-            </TouchableOpacity>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity><Text style={styles.legalText}>Privacy</Text></TouchableOpacity>
+            <View style={styles.dot} />
+            <TouchableOpacity><Text style={styles.legalText}>Terms</Text></TouchableOpacity>
           </View>
         </View>
       </View>
@@ -67,88 +74,94 @@ export function Footer() {
 
 const styles = StyleSheet.create({
   footer: {
-    backgroundColor: '#333333', 
-    paddingTop: 80, 
-    paddingBottom: 40, 
+    backgroundColor: COLORS.bg,
+    paddingTop: 40,
+    paddingBottom: 24,
   },
   container: {
-    marginHorizontal: 'auto',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
   },
-  containerMobile: {
-    paddingHorizontal: 24, 
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  grid: {
-    flexDirection: 'column',
-    marginBottom: 64,
-  },
-  gridMobile: {
-  },
-  brandSection: {
-    marginBottom: 32, 
-  },
-  brandSectionLarge: {
-    width: '48%', 
-    marginBottom: 0, 
-  },
-  brandTitle: {
+  brand: {
     fontFamily: 'serif',
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: -0.5, 
-    marginBottom: 24, 
-    color: '#F5F5F5', 
+    color: COLORS.text,
   },
-  brandDescription: {
-    color: 'rgba(245, 245, 245, 0.7)', 
-    maxWidth: 250,
-    lineHeight: 24, 
-    fontSize: 16,
-  },
-  sectionColumn: {
-    marginBottom: 20, 
-  },
-  sectionColumnMobile: {
-  },
-  sectionTitle: {
+  tagline: {
     fontSize: 12,
-    fontWeight: '600', 
-    letterSpacing: 1, 
+    color: COLORS.accent,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  socialGroup: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+  },
+  divider: {
+    backgroundColor: COLORS.border,
+    height: 1,
+    marginBottom: 24,
+  },
+  linkGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  column: {
+    flex: 1,
+  },
+  columnTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.text,
     textTransform: 'uppercase',
-    marginBottom: 24, 
-    color: '#FFD700', 
+    letterSpacing: 1.2,
+    marginBottom: 16,
   },
-  list: {
-  },
-  listItem: {
-    paddingVertical: 8,
+  linkItem: {
+    paddingVertical: 6,
   },
   linkText: {
-    color: 'rgba(245, 245, 245, 0.7)',
-    fontSize: 16,
-  },
-  bottomSection: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(245, 245, 245, 0.1)', 
-    paddingTop: 32,
-    flexDirection: 'column', 
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16, 
-  },
-  bottomSectionLarge: {
-    flexDirection: 'row', 
-  },
-  copyrightText: {
-    fontSize: 14, 
-    color: 'rgba(245, 245, 245, 0.5)', 
-  },
-  bottomLinks: {
-    flexDirection: 'row',
-    gap: 24, 
+    color: COLORS.muted,
     fontSize: 14,
   },
-  bottomLinkText: {
-    color: 'rgba(245, 245, 0.5)',
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
+  copyright: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legalText: {
+    fontSize: 12,
+    color: COLORS.muted,
+    textDecorationLine: 'underline',
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+  }
 });

@@ -1,540 +1,448 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  Alert,
-  Platform,
   StyleSheet,
   Dimensions,
+  TouchableOpacity,
+  Platform,
+  Alert,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  Text,
+  Surface,
+  TextInput,
+  Button,
+  ActivityIndicator,
+  IconButton,
+  Portal,
+  Modal,
+} from "react-native-paper";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import {
   Wallet,
   Plus,
+  Edit3,
   Trash2,
-  TrendingDown,
   Calendar,
   DollarSign,
-  Receipt,
   ArrowUpRight,
-  BarChart3,
-  History,
-  Edit3,
   X,
-  Filter,
-  Loader2,
 } from "lucide-react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Animated, {
-  Layout,
-  FadeIn,
-  FadeOut,
-  SlideInDown,
-  SlideOutDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from "react-native-reanimated";
-import { BarChart } from "react-native-gifted-charts"; // Usando react-native-gifted-charts para gráficos
-import { expensesApi } from "@/lib/api";
-import { formatCurrency } from "@/lib/format"; // Adapte para RN se necessário
-import { type ExpenseResponseDTO, type ExpenseRequestDTO, TimePeriod } from "@/types";
-import { useToast } from "@/hooks/use-toast"; // Assumindo que você tem um hook de toast adaptado para RN
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { MotiView, AnimatePresence } from "moti";
+import { BarChart } from "react-native-chart-kit";
 
-type FilterType = 'today' | 'yesterday' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom' | 'all';
+import { expensesApi } from "@/src/lib/api";
+import { TimePeriod, ExpenseResponseDTO, ExpenseRequestDTO } from "@/src/types";
+import { formatCurrency } from "@/src/lib/format";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+const CHART_WIDTH = width - 40;
 
-const getTailwindStyles = (tailwindString: string) => {
-  const styles: any = {};
-  const parts = tailwindString.split(" ");
+function getTodayStr() {
+  return format(new Date(), "yyyy-MM-dd");
+}
 
-  parts.forEach((part) => {
-    if (part.startsWith("bg-")) {
-      const color = part.replace("bg-", "");
-      if (color === "background") styles.backgroundColor = "#ffffff";
-      else if (color === "accent") styles.backgroundColor = "#f5f5f4"; // stone-100
-      else if (color === "primary") styles.backgroundColor = "#292524"; // stone-800
-      else if (color === "primary/5") styles.backgroundColor = "rgba(41,37,36,0.05)";
-      else if (color === "primary/10") styles.backgroundColor = "rgba(41,37,36,0.1)";
-      else if (color === "primary/90") styles.backgroundColor = "rgba(41,37,36,0.9)";
-      else if (color === "background/60") styles.backgroundColor = "rgba(255,255,255,0.6)";
-      else if (color === "background/90") styles.backgroundColor = "rgba(255,255,255,0.9)";
-      else if (color === "background/50") styles.backgroundColor = "rgba(255,255,255,0.5)";
-      else if (color === "background/30") styles.backgroundColor = "rgba(255,255,255,0.3)";
-      else if (color === "stone-800") styles.backgroundColor = "#292524";
-      else if (color === "stone-900") styles.backgroundColor = "#1c1917";
-      else if (color === "destructive/5") styles.backgroundColor = "rgba(239,68,68,0.05)";
-    } else if (part.startsWith("text-")) {
-      const color = part.replace("text-", "");
-      if (color === "primary") styles.color = "#292524";
-      else if (color === "white") styles.color = "#ffffff";
-      else if (color === "muted-foreground") styles.color = "#78716c"; // stone-500
-      else if (color === "foreground") styles.color = "#0c0a09"; // stone-950
-      else if (color === "stone-800") styles.color = "#292524";
-      else if (color === "stone-900") styles.color = "#1c1917";
-      else if (color === "destructive") styles.color = "#ef4444"; // red-500
-    } else if (part.startsWith("border-")) {
-      const color = part.replace("border-", "");
-      if (color === "border/30") styles.borderColor = "rgba(229,231,235,0.3)"; // Assuming border is stone-200
-      else if (color === "border/50") styles.borderColor = "rgba(229,231,235,0.5)";
-      else if (color === "primary/5") styles.borderColor = "rgba(41,37,36,0.05)";
-      else if (color === "primary/10") styles.borderColor = "rgba(41,37,36,0.1)";
-    } else if (part.startsWith("px-")) {
-      styles.paddingHorizontal = parseInt(part.replace("px-", "")) * 4;
-    } else if (part.startsWith("py-")) {
-      styles.paddingVertical = parseInt(part.replace("py-", "")) * 4;
-    } else if (part.startsWith("p-")) {
-      styles.padding = parseInt(part.replace("p-", "")) * 4;
-    } else if (part.startsWith("mt-")) {
-      styles.marginTop = parseInt(part.replace("mt-", "")) * 4;
-    } else if (part.startsWith("mb-")) {
-      styles.marginBottom = parseInt(part.replace("mb-", "")) * 4;
-    } else if (part.startsWith("gap-")) {
-      styles.gap = parseInt(part.replace("gap-", "")) * 4;
-    } else if (part.startsWith("h-")) {
-      styles.height = parseInt(part.replace("h-", "")) * 4;
-    } else if (part.startsWith("w-")) {
-      styles.width = parseInt(part.replace("w-", "")) * 4;
-    } else if (part.startsWith("rounded-")) {
-      if (part === "rounded-full") styles.borderRadius = 9999;
-      else if (part === "rounded-xl") styles.borderRadius = 12;
-      else if (part === "rounded-2xl") styles.borderRadius = 16;
-    } else if (part === "flex") styles.display = "flex";
-    else if (part === "flex-col") styles.flexDirection = "column";
-    else if (part === "flex-row") styles.flexDirection = "row";
-    else if (part === "items-center") styles.alignItems = "center";
-    else if (part === "justify-center") styles.justifyContent = "center";
-    else if (part === "justify-between") styles.justifyContent = "space-between";
-    else if (part === "flex-wrap") styles.flexWrap = "wrap";
-    else if (part === "relative") styles.position = "relative";
-    else if (part === "absolute") styles.position = "absolute";
-    else if (part === "z-10") styles.zIndex = 10;
-    else if (part === "z-20") styles.zIndex = 20;
-    else if (part === "text-center") styles.textAlign = "center";
-    else if (part === "text-sm") styles.fontSize = 14;
-    else if (part === "text-xs") styles.fontSize = 12;
-    else if (part === "text-[10px]") styles.fontSize = 10;
-    else if (part === "text-lg") styles.fontSize = 18;
-    else if (part === "text-xl") styles.fontSize = 20;
-    else if (part === "text-2xl") styles.fontSize = 24;
-    else if (part === "text-4xl") styles.fontSize = 36;
-    else if (part === "font-bold") styles.fontWeight = "700";
-    else if (part === "font-serif") styles.fontFamily = Platform.OS === "ios" ? "Georgia" : "serif";
-    else if (part === "uppercase") styles.textTransform = "uppercase";
-    else if (part === "tracking-widest") styles.letterSpacing = 1;
-    else if (part === "tracking-[0.2em]") styles.letterSpacing = 2;
-    else if (part === "tracking-tighter") styles.letterSpacing = -0.5;
-    else if (part === "shadow-md") styles.shadowColor = "#000";
-    else if (part === "shadow-md") styles.shadowOffset = { width: 0, height: 2 };
-    else if (part === "shadow-md") styles.shadowOpacity = 0.1;
-    else if (part === "shadow-md") styles.shadowRadius = 4;
-    else if (part === "elevation-2") styles.elevation = 2; // Android shadow
-    else if (part === "shadow-xl") styles.shadowColor = "#000";
-    else if (part === "shadow-xl") styles.shadowOffset = { width: 0, height: 10 };
-    else if (part === "shadow-xl") styles.shadowOpacity = 0.1;
-    else if (part === "shadow-xl") styles.shadowRadius = 15;
-    else if (part === "elevation-5") styles.elevation = 5;
-    else if (part === "shadow-2xl") styles.shadowColor = "#000";
-    else if (part === "shadow-2xl") styles.shadowOffset = { width: 0, height: 20 };
-    else if (part === "shadow-2xl") styles.shadowOpacity = 0.25;
-    else if (part === "shadow-2xl") styles.shadowRadius = 25;
-    else if (part === "elevation-10") styles.elevation = 10;
-    else if (part === "shadow-sm") styles.shadowColor = "#000";
-    else if (part === "shadow-sm") styles.shadowOffset = { width: 0, height: 1 };
-    else if (part === "shadow-sm") styles.shadowOpacity = 0.05;
-    else if (part === "shadow-sm") styles.shadowRadius = 2;
-    else if (part === "elevation-1") styles.elevation = 1;
-    else if (part === "transition-all") styles.transitionProperty = "all";
-    else if (part === "whitespace-nowrap") styles.whiteSpace = "nowrap";
-    else if (part === "shrink-0") styles.flexShrink = 0;
-    else if (part === "top-1/2") styles.top = "50%";
-    else if (part === "-translate-y-1/2") styles.transform = [{ translateY: -10 }]; // Adjusted for RN
-    else if (part === "pl-10") styles.paddingLeft = 40;
-    else if (part === "italic") styles.fontStyle = "italic";
-    else if (part === "opacity-0") styles.opacity = 0;
-    else if (part === "group-hover:opacity-100") styles.groupHoverOpacity100 = { opacity: 1 }; // Placeholder for hover
-    else if (part === "hover:bg-accent") styles.hoverBgAccent = { backgroundColor: "#f5f5f4" };
-    else if (part === "hover:text-muted-foreground") styles.hoverTextMutedForeground = { color: "#78716c" };
-    else if (part === "hover:bg-primary/90") styles.hoverBgPrimary90 = { backgroundColor: "rgba(41,37,36,0.9)" };
-    else if (part === "hover:bg-stone-900") styles.hoverBgStone900 = { backgroundColor: "#1c1917" };
-    else if (part === "hover:text-primary") styles.hoverTextPrimary = { color: "#292524" };
-    else if (part === "hover:bg-primary/5") styles.hoverBgPrimary5 = { backgroundColor: "rgba(41,37,36,0.05)" };
-    else if (part === "hover:text-destructive") styles.hoverTextDestructive = { color: "#ef4444" };
-    else if (part === "hover:bg-destructive/5") styles.hoverBgDestructive5 = { backgroundColor: "rgba(239,68,68,0.05)" };
-    else if (part === "hover:shadow-lg") styles.hoverShadowLg = { shadowColor: "#000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 6 };
-    else if (part === "no-scrollbar") styles.overflow = "hidden"; // Simplified for RN, might need custom scrollbar component
-    else if (part === "sticky") styles.position = "absolute"; // Simplified for RN, sticky behavior is complex
-    else if (part === "top-24") styles.top = 96;
-    else if (part === "-mt-16") styles.marginTop = -64;
-    else if (part === "max-h-[700px]") styles.maxHeight = 700;
-    else if (part === "overflow-y-auto") styles.overflowY = "scroll";
-    else if (part === "custom-scrollbar") styles.customScrollbar = {}; // Placeholder for custom scrollbar
-    else if (part === "opacity-40") styles.opacity = 0.4;
-  });
+type FilterType = "today" | "yesterday" | "this-week" | "last-week" | "this-month" | "last-month" | "custom" | "all";
 
-  return styles;
-};
+const PERIOD_BUTTONS: { key: FilterType; label: string }[] = [
+  { key: "today", label: "Hoje" },
+  { key: "this-week", label: "Semana" },
+  { key: "this-month", label: "Mês" },
+  { key: "all", label: "Tudo" },
+  { key: "custom", label: "Personalizado" },
+];
 
-const cn = (tailwindString: string, ...args: any[]) => {
-  const baseStyles = getTailwindStyles(tailwindString);
-  const combinedStyles = StyleSheet.create({
-    dynamic: { ...baseStyles, ...Object.assign({}, ...args) },
-  });
-  return combinedStyles.dynamic;
-};
+export default function ExpensesScreen() {
+  const qc = useQueryClient();
 
-export default function ExpenseManagement() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const scrollViewRef = useRef<ScrollView>(null);
+  /* ------------------------- Filtros ------------------------- */
+  const [period, setPeriod] = useState<FilterType>("this-month");
+  const [startDate, setStartDate] = useState(getTodayStr());
+  const [endDate, setEndDate] = useState(getTodayStr());
 
+  /* ---------------------- Estado do Formulário ------------------- */
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<ExpenseResponseDTO | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
 
-  const [filter, setFilter] = useState<FilterType>("this-month");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  function resetForm() {
+    setEditing(null);
+    setName("");
+    setPrice("");
+  }
 
+  /* ------------------------- Queries ------------------------- */
   const { data: expenses, isLoading } = useQuery<ExpenseResponseDTO[]>({
-    queryKey: ["expenses", filter, startDate, endDate],
+    queryKey: ["expenses", period, startDate, endDate],
     queryFn: async () => {
-      switch (filter) {
-        case 'today': return (await expensesApi.getExpensesForToday()).data;
-        case 'yesterday': return (await expensesApi.getExpensesForYesterday()).data;
-        case 'this-week': return (await expensesApi.getExpensesForThisWeek()).data;
-        case 'last-week': return (await expensesApi.getExpensesForLastWeek()).data;
-        case 'this-month': return (await expensesApi.getExpensesForThisMonth()).data;
-        case 'last-month': return (await expensesApi.getExpensesForLastMonth()).data;
-        case 'all': return (await expensesApi.getAll()).data;
-        case 'custom':
-          return (await expensesApi.getExpensesByPeriod(TimePeriod.CUSTOM, startDate, endDate)).data;
-        default: return (await expensesApi.getExpensesForThisMonth()).data;
+      switch (period) {
+        case "today": return (await expensesApi.getExpensesForToday()).data;
+        case "yesterday": return (await expensesApi.getExpensesForYesterday()).data;
+        case "this-week": return (await expensesApi.getExpensesForThisWeek()).data;
+        case "last-week": return (await expensesApi.getExpensesForLastWeek()).data;
+        case "this-month": return (await expensesApi.getExpensesForThisMonth()).data;
+        case "last-month": return (await expensesApi.getExpensesForLastMonth()).data;
+        case "custom": return (await expensesApi.getExpensesByPeriod(TimePeriod.CUSTOM, startDate, endDate)).data;
+        default: return (await expensesApi.getAll()).data;
       }
     },
   });
 
+  /* ------------------------ Mutations ------------------------ */
   const createMutation = useMutation({
     mutationFn: (data: ExpenseRequestDTO) => expensesApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      setModalOpen(false);
       resetForm();
-      toast({ title: "Sucesso", description: "Despesa registrada no livro." });
-    },
-    onError: (error) => {
-      toast({ title: "Erro", description: `Falha ao registrar despesa: ${error.message}`, variant: "destructive" });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number, data: ExpenseRequestDTO }) => expensesApi.update(id, data),
+    mutationFn: ({ id, data }: { id: number; data: ExpenseRequestDTO }) => expensesApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      setModalOpen(false);
       resetForm();
-      toast({ title: "Atualizado", description: "O registro foi devidamente alterado." });
-    },
-    onError: (error) => {
-      toast({ title: "Erro", description: `Falha ao atualizar despesa: ${error.message}`, variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => expensesApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      toast({ title: "Removido", description: "Entrada excluída com sucesso." });
-    },
-    onError: (error) => {
-      toast({ title: "Erro", description: `Falha ao remover despesa: ${error.message}`, variant: "destructive" });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["expenses"] }),
   });
 
-  const resetForm = () => {
-    setName("");
-    setPrice("");
-    setEditingId(null);
-  };
+  /* ---------------------- Dados Derivados ----------------------- */
+  const total = expenses?.reduce((acc, e) => acc + e.price, 0) ?? 0;
 
-  const handleSubmit = () => {
-    if (!name || !price) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos.");
-      return;
-    }
+  const chartData = useMemo(() => {
+    if (!expenses) return [];
+    const groups: Record<string, number> = {};
+    expenses.forEach((e) => {
+      const lbl = format(new Date(e.date), "dd/MM");
+      groups[lbl] = (groups[lbl] || 0) + e.price;
+    });
+    return Object.entries(groups).map(([date, amount]) => ({ date, amount }));
+  }, [expenses]);
+
+  /* ----------------------- Handlers -------------------------- */
+  const handleSave = () => {
+    if (!name || !price) return;
     const payload = { name, price: parseFloat(price) };
-
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, data: payload });
+    if (editing) {
+      updateMutation.mutate({ id: editing.id, data: payload });
     } else {
       createMutation.mutate(payload);
     }
   };
 
-  const handleEdit = (expense: ExpenseResponseDTO) => {
-    setEditingId(expense.id);
-    setName(expense.name);
-    setPrice(expense.price.toString());
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  const confirmDelete = (id: number, expenseName: string) => {
+    Alert.alert(
+      "Excluir Despesa",
+      `Tem certeza que deseja excluir "${expenseName}"?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Excluir", style: "destructive", onPress: () => deleteMutation.mutate(id) }
+      ]
+    );
   };
 
-  const chartData = useMemo(() => {
-    if (!expenses) return [];
-    const groups = expenses.reduce((acc: Record<string, number>, curr) => {
-      const date = new Date(curr.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-      acc[date] = (acc[date] || 0) + curr.price;
-      return acc;
-    }, {});
-    return Object.entries(groups).map(([date, amount]) => ({ value: amount, label: date }));
-  }, [expenses]);
-
-  const totalExpenses = expenses?.reduce((acc, curr) => acc + curr.price, 0) || 0;
-
+  /* ------------------------- Render -------------------------- */
   return (
-    <SafeAreaView style={cn("min-h-screen bg-background")}>
-      <ScrollView ref={scrollViewRef} contentContainerStyle={cn("pb-24")}>
-        <View style={cn("relative h-[180px] flex items-center justify-center overflow-hidden border-b border-border/30")}>
-          <View style={cn("relative z-10 text-center px-4 mt-5")}>
-            <Text style={cn("text-xl font-serif font-bold text-foreground tracking-tight")}>
-              Gestão de Despesas
-            </Text>
-            <Text style={cn("text-sm text-muted-foreground mt-1")}>
-              Controle seus gastos com estilo.
-            </Text>
-          </View>
-        </View>
+    // Wrapper pai flex: 1 para permitir o FAB fixo sobre o ScrollView
+    <View style={styles.container}>
+      <Animated.ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }} // Espaço extra para o FAB não cobrir itens
+        entering={FadeIn.duration(600)}
+      >
+        {/* HEADER */}
+        <MotiView 
+          from={{ opacity: 0, translateX: -10 }}
+          animate={{ opacity: 1, translateX: 0 }}
+          transition={{ type: 'timing', duration: 700 }}
+          style={styles.header}
+        >
+          <Text style={styles.subtitle}>Painel Administrativo</Text>
+          <Text style={styles.title}>Controle de Despesas</Text>
+        </MotiView>
 
-        <View style={cn("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-20")}>
-          <View style={cn("mb-8 p-4 bg-background/60 flex flex-wrap items-center justify-between gap-4 border border-primary/5 rounded-2xl shadow-sm")}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={cn("flex items-center gap-3 pb-2")}>
-              <Filter size={16} color={cn("", "text-primary").color} style={cn("shrink-0")} />
-              {(['today', 'this-week', 'this-month', 'all', 'custom'] as FilterType[]).map((t) => (
+        {/* FILTROS */}
+        <Animated.View entering={FadeInDown.delay(100).duration(600)}>
+          <Surface style={styles.filterCard} elevation={1}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+              {PERIOD_BUTTONS.map((b) => (
                 <TouchableOpacity
-                  key={t}
-                  onPress={() => setFilter(t)}
-                  style={cn(
-                    "text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full transition-all",
-                    filter === t ? "bg-primary text-white shadow-md" : "bg-transparent text-muted-foreground",
-                    filter === t ? {} : { hoverBgAccent: true }
-                  )}
+                  key={b.key}
+                  onPress={() => setPeriod(b.key)}
+                  style={[styles.chip, period === b.key && styles.chipActive]}
                 >
-                  <Text style={cn(
-                    "text-[10px] uppercase tracking-widest font-bold",
-                    filter === t ? "text-white" : "text-muted-foreground"
-                  )}>
-                    {t === 'today' ? 'Hoje' : t === 'this-week' ? 'Semana' : t === 'this-month' ? 'Mês' : t === 'all' ? 'Tudo' : 'Personalizado'}
-                  </Text>
+                  <Text style={[styles.chipText, period === b.key && styles.chipTextActive]}>{b.label}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {filter === 'custom' && (
-              <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(300)} style={cn("flex flex-row items-center gap-2")}>
-                <TextInput
-                  placeholder="Data Inicial"
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  style={cn("h-8 text-xs bg-transparent border border-border/50 rounded-xl px-3 text-foreground")}
-                  keyboardType="number-pad" // Use appropriate keyboard type for date input
-                />
-                <Text style={cn("text-muted-foreground")}>à</Text>
-                <TextInput
-                  placeholder="Data Final"
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  style={cn("h-8 text-xs bg-transparent border border-border/50 rounded-xl px-3 text-foreground")}
-                  keyboardType="number-pad"
-                />
-              </Animated.View>
+            {period === "custom" && (
+              <MotiView from={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 60 }} style={styles.customRow}>
+                <TextInput mode="outlined" label="Início" value={startDate} onChangeText={setStartDate} style={styles.dateInput} activeOutlineColor="#292524" />
+                <TextInput mode="outlined" label="Fim" value={endDate} onChangeText={setEndDate} style={styles.dateInput} activeOutlineColor="#292524" />
+                <IconButton icon={Calendar} size={22} onPress={() => qc.invalidateQueries({ queryKey: ["expenses"] })} />
+              </MotiView>
             )}
-          </View>
+          </Surface>
+        </Animated.View>
 
-          <View style={cn("grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12")}>
-            <Animated.View entering={FadeIn.duration(400)} style={cn("p-8 bg-background/90 border border-primary/10 flex flex-col justify-between rounded-2xl shadow-xl")}>
-              <View>
-                <View style={cn("flex justify-between items-center mb-6")}>
-                  <View style={cn("p-3 bg-accent rounded-xl")}>
-                    <Wallet size={20} color={cn("", "text-primary").color} />
+        {/* CARD TOTAL */}
+        <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+          <Surface style={styles.totalCard} elevation={2}>
+            <View style={styles.totalHeader}>
+              <View style={styles.totalIcon}>
+                <Wallet size={20} color="#7c2d12" />
+              </View>
+              <Text style={styles.totalLabel}>Total no Período</Text>
+            </View>
+            <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+            <Text style={styles.totalSub}>{expenses?.length ?? 0} registros</Text>
+          </Surface>
+        </Animated.View>
+
+        {/* GRÁFICO */}
+        {chartData.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(300).duration(600)}>
+            <Surface style={styles.chartCard} elevation={2}>
+              <Text style={styles.chartTitle}>Fluxo de Saída</Text>
+              <BarChart
+                data={{ labels: chartData.map((d) => d.date), datasets: [{ data: chartData.map((d) => d.amount) }] }}
+                width={CHART_WIDTH}
+                height={220}
+                yAxisLabel="" 
+                yAxisSuffix="" 
+                withInnerLines={false}
+                fromZero
+                chartConfig={{
+                  backgroundGradientFrom: "#fff",
+                  backgroundGradientTo: "#fff",
+                  color: () => "#7c2d12",
+                  labelColor: () => "#78716c",
+                  barPercentage: 0.6,
+                }}
+                style={{ marginLeft: -10 }}
+              />
+            </Surface>
+          </Animated.View>
+        )}
+
+        {/* LISTA DE DESPESAS */}
+        {isLoading ? (
+          <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#292524" />
+        ) : (
+          <AnimatePresence>
+            {expenses?.map((e, index) => (
+              <MotiView
+                key={e.id}
+                from={{ opacity: 0, translateY: 15 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 400, delay: 400 + (index * 80) }}
+              >
+                <Surface style={styles.expenseCard} elevation={1}>
+                  <View style={styles.cardLeft}>
+                    <View style={styles.expenseIcon}>
+                      <ArrowUpRight size={16} color="#7c2d12" />
+                    </View>
+                    <View>
+                      <Text style={styles.expenseName}>{e.name}</Text>
+                      <Text style={styles.expenseDate}>{format(new Date(e.date), "dd 'de' MMMM yyyy")}</Text>
+                    </View>
                   </View>
-                  <Text style={cn("text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground")}>Status Atual</Text>
-                </View>
-                <Text style={cn("text-sm text-muted-foreground mb-1")}>Total no Período</Text>
-                <Text style={cn("text-4xl font-serif font-bold text-foreground")}>{formatCurrency(totalExpenses)}</Text>
-              </View>
-              <View style={cn("mt-8 pt-6 border-t border-border/50")}>
-                <View style={cn("flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-tighter")}>
-                  <Calendar size={16} color={cn("", "text-primary").color} />
-                  <Text style={cn("text-primary text-xs font-bold uppercase tracking-tighter")}>{expenses?.length || 0} Registros encontrados</Text>
-                </View>
-              </View>
-            </Animated.View>
 
-            <Animated.View entering={FadeIn.duration(400).delay(100)} style={cn("lg:col-span-2 p-8 bg-background/50 border border-border/50 rounded-2xl shadow-sm")}>
-              <View style={cn("flex items-center justify-between mb-6")}>
-                <Text style={cn("font-serif text-lg font-bold flex items-center gap-2")}>
-                  <BarChart3 size={20} color={cn("", "text-primary").color} /> Fluxo de Saída
-                </Text>
-              </View>
-              <View style={cn("h-[220px] w-full")}>
-                {chartData.length > 0 ? (
-                  <BarChart
-                    data={chartData}
-                    barWidth={35}
-                    spacing={20}
-                    initialSpacing={10}
-                    barBorderRadius={4}
-                    frontColor={cn("", "bg-primary").backgroundColor}
-                    yAxisThickness={0}
-                    xAxisThickness={0}
-                    xAxisColor="rgba(0,0,0,0.05)"
-                    yAxisColor="rgba(0,0,0,0.05)"
-                    hideRules
-                    showYAxisIndices
-                    yAxisLabelSuffix="R$"
-                    noOfSections={4}
-                    maxValue={Math.max(...chartData.map(item => item.value)) * 1.2}
-                    width={width - 120} // Adjust width for padding and spacing
-                  />
-                ) : (
-                  <View style={cn("flex-1 items-center justify-center")}>
-                    <Text style={cn("text-muted-foreground text-sm")}>Sem dados para o gráfico.</Text>
+                  <View style={styles.cardRight}>
+                    <Text style={styles.expensePrice}>{formatCurrency(e.price)}</Text>
+                    <View style={styles.actions}>
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => {
+                          setEditing(e);
+                          setName(e.name);
+                          setPrice(String(e.price));
+                          setModalOpen(true);
+                        }}
+                      >
+                        <Edit3 size={18} color="#44403c" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => confirmDelete(e.id, e.name)}
+                      >
+                        <Trash2 size={18} color="#dc2626" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                )}
-              </View>
-            </Animated.View>
-          </View>
+                </Surface>
+              </MotiView>
+            ))}
+          </AnimatePresence>
+        )}
+      </Animated.ScrollView>
 
-          <View style={cn("grid grid-cols-1 lg:grid-cols-12 gap-8")}>
-            <Animated.View entering={SlideInDown.duration(400)} style={cn("lg:col-span-4 p-8 border border-border/50 bg-background/50 rounded-2xl shadow-2xl")}>
-              <View style={cn("flex justify-between items-center mb-6")}>
-                <Text style={cn("font-serif text-xl font-bold flex items-center gap-2")}>
-                  {editingId ? <Edit3 size={20} color={cn("", "text-primary").color} /> : <Plus size={20} color={cn("", "text-primary").color} />}
-                  <Text style={cn("text-foreground")}>{editingId ? "Editar Registro" : "Nova Anotação"}</Text>
-                </Text>
-                {editingId && (
-                  <TouchableOpacity onPress={resetForm} style={cn("p-2 rounded-full", { hoverTextPrimary: true })}>
-                    <X size={20} color={cn("", "text-muted-foreground").color} />
-                  </TouchableOpacity>
-                )}
-              </View>
+      {/* BOTÃO FLUTUANTE - Fora do ScrollView para ficar estático e mais alto */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.8}
+        onPress={() => {
+          resetForm();
+          setModalOpen(true);
+        }}
+      >
+        <Plus size={24} color="#fff" />
+      </TouchableOpacity>
 
-              <View style={cn("space-y-5")}>
-                <View style={cn("space-y-2")}>
-                  <Text style={cn("text-[10px] uppercase tracking-widest font-bold text-muted-foreground")}>Descrição</Text>
-                  <TextInput
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Ex: Jantar no Fasano"
-                    style={cn("bg-transparent border border-border/50 focus:ring-1 focus:ring-primary h-12 rounded-xl px-3 text-foreground")}
-                  />
-                </View>
-                <View style={cn("space-y-2")}>
-                  <Text style={cn("text-[10px] uppercase tracking-widest font-bold text-muted-foreground")}>Valor</Text>
-                  <View style={cn("relative")}>
-                    <DollarSign size={16} color={cn("", "text-muted-foreground").color} style={cn("absolute left-3 top-1/2 -translate-y-1/2")} />
+      <Portal>
+        <Modal
+          visible={modalOpen}
+          onDismiss={() => { resetForm(); setModalOpen(false); }}
+          contentContainerStyle={[
+            styles.modalOverlay, 
+            { justifyContent: Platform.OS === 'ios' ? 'flex-end' : 'center' }
+          ]}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={{ flex: Platform.OS === 'ios' ? 1 : 0 }}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <MotiView
+                from={{ translateY: height * 0.5, opacity: 0 }}
+                animate={{ translateY: 0, opacity: 1 }}
+                transition={{ type: 'spring', damping: 100 }}
+                style={[
+                  styles.modalContent,
+                  // No Android, se o teclado ainda cobrir, forçamos um margem inferior
+                  Platform.OS === 'android' && { marginBottom: 20 }
+                ]}
+              >
+                <ScrollView 
+                  bounces={false} 
+                  showsVerticalScrollIndicator={false}
+                  // Garante que o conteúdo interno possa ser rolado se o teclado for gigante
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{editing ? "Editar" : "Nova"} Despesa</Text>
+                    <TouchableOpacity onPress={() => { resetForm(); setModalOpen(false); }}>
+                      <X size={24} color="#44403c" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ gap: 16 }}>
                     <TextInput
+                      mode="outlined"
+                      label="Descrição"
+                      value={name}
+                      onChangeText={setName}
+                      activeOutlineColor="#292524"
+                    />
+                    <TextInput
+                      mode="outlined"
+                      label="Valor"
                       keyboardType="numeric"
                       value={price}
                       onChangeText={setPrice}
-                      placeholder="0.00"
-                      style={cn("pl-10 bg-transparent border border-border/50 h-12 rounded-xl px-3 text-foreground")}
+                      activeOutlineColor="#292524"
+                      left={<TextInput.Icon icon={() => <DollarSign size={16} color="#78716c" />} />}
                     />
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={handleSubmit}
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  style={cn(
-                    "w-full h-12 rounded-xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center",
-                    editingId ? "bg-stone-800" : "bg-primary",
-                    editingId ? { hoverBgStone900: true } : { hoverBgPrimary90: true },
-                    (createMutation.isPending || updateMutation.isPending) ? { opacity: 0.5 } : {}
-                  )}
-                >
-                  {(createMutation.isPending || updateMutation.isPending) ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={cn("text-white text-[10px] font-bold uppercase tracking-widest")}>
-                      {editingId ? "Atualizar Livro" : "Confirmar Registro"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-
-            <Animated.View entering={FadeIn.duration(400).delay(200)} style={cn("lg:col-span-8 border border-border/50 bg-background/30 rounded-2xl shadow-sm overflow-hidden")}>
-              <View style={cn("p-8 border-b border-border/50 flex flex-row justify-between items-center")}>
-                <View>
-                  <Text style={cn("font-serif text-2xl font-bold flex items-center gap-3")}>
-                    <History size={24} color={cn("", "text-primary").color} />
-                    <Text style={cn("text-foreground")}>Histórico</Text>
-                  </Text>
-                  <Text style={cn("text-sm text-muted-foreground italic")}>Exibindo registros de: <Text style={cn("font-bold text-primary")}>{filter.replace('-', ' ')}</Text></Text>
-                </View>
-                <Receipt size={32} color={cn("", "text-muted-foreground/30").color} />
-              </View>
-
-              <ScrollView style={cn("p-4 md:p-8 max-h-[700px]")} contentContainerStyle={cn("space-y-4")}>
-                {isLoading ? (
-                  <View style={cn("flex items-center justify-center py-20")}>
-                    <Loader2 size={24} color={cn("", "text-muted-foreground").color} style={cn("animate-spin")} />
-                    <Text style={cn("text-muted-foreground text-sm mt-2")}>Carregando despesas...</Text>
-                  </View>
-                ) : expenses?.length > 0 ? (
-                  expenses.map((expense) => (
-                    <Animated.View
-                      key={expense.id}
-                      layout={Layout.springify()}
-                      entering={FadeIn}
-                      exiting={FadeOut}
-                      style={cn("flex flex-row items-center justify-between p-5 rounded-2xl border border-border/40 bg-background/60 shadow-sm", { hoverBgBackground: true, hoverShadowLg: true })}
+                    <Button
+                      mode="contained"
+                      onPress={handleSave}
+                      style={styles.saveBtn}
                     >
-                      <View style={cn("flex flex-row items-center gap-5")}>
-                        <View style={cn("w-10 h-10 rounded-full bg-accent flex items-center justify-center")}>
-                          <ArrowUpRight size={16} color={cn("", "text-primary").color} />
-                        </View>
-                        <View>
-                          <Text style={cn("font-bold text-stone-800")}>{expense.name}</Text>
-                          <Text style={cn("text-[9px] text-muted-foreground font-bold uppercase tracking-[0.2em]")}>
-                            {new Date(expense.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={cn("flex flex-row items-center gap-4")}>
-                        <Text style={cn("font-serif text-lg font-bold text-stone-900")}>
-                          {formatCurrency(expense.price)}
-                        </Text>
-                        <View style={cn("flex flex-row items-center gap-1 opacity-0", { groupHoverOpacity100: true })}>
-                          <TouchableOpacity
-                            onPress={() => handleEdit(expense)}
-                            style={cn("p-2 rounded-full", { hoverTextPrimary: true, hoverBgPrimary5: true })}
-                          >
-                            <Edit3 size={16} color={cn("", "text-muted-foreground").color} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => deleteMutation.mutate(expense.id)}
-                            style={cn("p-2 rounded-full", { hoverTextDestructive: true, hoverBgDestructive5: true })}
-                          >
-                            <Trash2 size={16} color={cn("", "text-muted-foreground").color} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </Animated.View>
-                  ))
-                ) : (
-                  <View style={cn("py-20 text-center opacity-40")}>
-                    <Text style={cn("font-serif text-lg italic text-muted-foreground")}>Nenhum registro encontrado para este período.</Text>
+                      Salvar
+                    </Button>
                   </View>
-                )}
-              </ScrollView>
-            </Animated.View>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+                </ScrollView>
+              </MotiView>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </Modal>
+      </Portal>
+    </View>
   );
 }
+
+/* --------------------------- Estilos --------------------------- */
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fafaf9" },
+  header: { padding: 20, paddingTop: Platform.OS === 'ios' ? 50 : 30 },
+  subtitle: { fontSize: 12, fontWeight: "bold", color: "#78716c", textTransform: "uppercase", letterSpacing: 1 },
+  title: { fontFamily: "serif", fontSize: 28, fontWeight: "bold", color: "#1c1917", marginTop: 4 },
+
+  filterCard: { marginHorizontal: 16, padding: 16, borderRadius: 16, backgroundColor: "#ffffff", marginBottom: 20 },
+  filterScroll: { gap: 8 },
+  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "#fafaf9" },
+  chipActive: { backgroundColor: "#292524", borderColor: "#292524" },
+  chipText: { fontSize: 13, fontWeight: "bold", color: "#78716c" },
+  chipTextActive: { color: "#ffffff" },
+  customRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  dateInput: { flex: 1, backgroundColor: "#ffffff", height: 45 },
+
+  totalCard: { marginHorizontal: 16, padding: 20, borderRadius: 20, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#f5f5f4", marginBottom: 20 },
+  totalHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  totalIcon: { padding: 8, backgroundColor: "#fde68a", borderRadius: 10 },
+  totalLabel: { fontSize: 12, fontWeight: "600", color: "#b45309", textTransform: "uppercase" },
+  totalValue: { fontFamily: "serif", fontSize: 32, fontWeight: "bold", color: "#1c1917", marginTop: 6 },
+  totalSub: { fontSize: 11, color: "#78716c", marginTop: 4 },
+
+  chartCard: { marginHorizontal: 16, padding: 16, borderRadius: 20, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#f5f5f4", marginBottom: 24 },
+  chartTitle: { fontFamily: "serif", fontWeight: "bold", color: "#1c1917", marginBottom: 12 },
+
+  expenseCard: { marginHorizontal: 16, padding: 16, borderRadius: 20, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#e7e5e4", flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  cardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  expenseIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#fef3c7", justifyContent: "center", alignItems: "center" },
+  expenseName: { fontWeight: "bold", color: "#1c1917", fontSize: 15 },
+  expenseDate: { fontSize: 11, color: "#a8a29e", marginTop: 2 },
+  cardRight: { alignItems: "flex-end", gap: 4 },
+  expensePrice: { fontFamily: "serif", fontSize: 18, fontWeight: "bold", color: "#1c1917" },
+  actions: { flexDirection: "row", gap: 0, marginTop: -4 },
+  actionBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#f5f5f4", 
+    marginLeft: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+  },
+
+  fab: {
+    position: "absolute",
+    bottom: Platform.OS === 'ios' ? 40 : 60, // Posição segura contra o botão voltar do Android
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#292524",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+  },
+
+  modalOverlay: { margin: 0, justifyContent: 'flex-end', flex: 1 },
+  modalContent: { backgroundColor: "#ffffff", borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 10 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontFamily: "serif", fontSize: 24, fontWeight: "bold", color: "#1c1917" },
+  saveBtn: { borderRadius: 16, backgroundColor: "#292524", paddingVertical: 6, marginTop: 8 },
+});

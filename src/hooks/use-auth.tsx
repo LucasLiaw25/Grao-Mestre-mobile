@@ -3,9 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import type { UserResponseDTO, AuthResponseDTO, UserLoginRequestDTO, UserRegisterRequestDTO } from "../types"; 
 import { Platform } from "react-native";
+import apiClient from "../lib/api";
 
-const API_BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8081/api' : 'http://localhost:8081/api';
-
+const LOCAL_IP = '192.168.15.88';
+export const API_BASE_URL = "https://graomestre-production.up.railway.app/api";
 
 interface AuthContextType {
   user: UserResponseDTO | null;
@@ -40,6 +41,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
 
   }, []);
+
+  apiClient.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            console.warn("Requisição não autorizada ou proibida. Token inválido ou expirado. Realizando logout automático.");
+      
+            await AsyncStorage.removeItem("grao_token");
+            await AsyncStorage.removeItem("grao_user");
+        }
+        return Promise.reject(error);
+    }
+);
 
   const login = async (data: UserLoginRequestDTO) => {
     const res = await axios.post<AuthResponseDTO>(`${API_BASE_URL}/users/login`, data);

@@ -1,112 +1,115 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { Text, Avatar, Searchbar, Surface, ActivityIndicator } from 'react-native-paper';
+import { useQuery } from '@tanstack/react-query';
+import { categoriesApi } from '@/src/lib/api';
+import { CategoryResponseDTO } from '@/src/types';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+export default function ExploreScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
 
-export default function TabTwoScreen() {
+  // Busca as categorias reais do seu banco MySQL via Spring Boot
+  const { data: categories, isLoading } = useQuery<CategoryResponseDTO[]>({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const response = await categoriesApi.getAll();
+      // O Spring Boot pode retornar uma lista pura ou um objeto Pageable (content)
+      const data = response.data as any;
+      return data.content || data;
+    },
+  });
+
+  // Filtro simples local para a busca
+  const filteredCategories = categories?.filter(cat =>
+    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const renderCategory = ({ item }: { item: CategoryResponseDTO }) => (
+    <TouchableOpacity 
+      style={styles.categoryCard}
+      onPress={() => {
+        // Futura integração: navegar para lista de produtos filtrada
+        console.log(`Filtrar por: ${item.name}`);
+      }}
+    >
+      <Surface style={styles.iconWrapper} elevation={1}>
+        {/* Usamos a primeira letra do nome como ícone caso não haja um mapeamento */}
+        <Avatar.Text 
+          size={48} 
+          label={item.name.substring(0, 1).toUpperCase()} 
+          style={styles.avatar}
+          labelStyle={styles.avatarLabel}
+        />
+      </Surface>
+      <Text variant="titleMedium" style={styles.categoryName} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text variant="bodySmall" style={styles.categoryDesc} numberOfLines={2}>
+        {item.description || "Explorar coleção"}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>Descobrir</Text>
+        <Text variant="bodyMedium" style={styles.subtitle}>
+          Navegue pelas seleções exclusivas do Grão Mestre.
+        </Text>
+      </View>
+
+      <Searchbar
+        placeholder="O que você procura?"
+        onChangeText={setSearchQuery}
+        value={searchQuery}
+        style={styles.searchBar}
+        elevation={1}
+      />
+
+      {isLoading ? (
+        <ActivityIndicator animating={true} color="#292524" style={styles.loader} />
+      ) : (
+        <FlatList
+          data={filteredCategories}
+          renderItem={renderCategory}
+          keyExtractor={(item) => item.id.toString()}
+          numColumns={2}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>Nenhuma categoria encontrada.</Text>
+          }
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: { flex: 1, backgroundColor: '#fafaf9' },
+  header: { paddingHorizontal: 20, marginTop: 60, marginBottom: 20 },
+  title: { fontFamily: 'serif', fontWeight: 'bold', color: '#1c1917' },
+  subtitle: { color: '#78716c', marginTop: 4 },
+  searchBar: { marginHorizontal: 20, marginBottom: 25, backgroundColor: '#ffffff', borderRadius: 12 },
+  loader: { marginTop: 50 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  columnWrapper: { justifyContent: 'space-between' },
+  categoryCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  iconWrapper: { borderRadius: 25, marginBottom: 12, backgroundColor: '#f5f5f4' },
+  avatar: { backgroundColor: '#292524' },
+  avatarLabel: { fontWeight: 'bold', color: '#ffffff' },
+  categoryName: { fontWeight: 'bold', color: '#1c1917', textAlign: 'center' },
+  categoryDesc: { color: '#a8a29e', fontSize: 11, textAlign: 'center', marginTop: 4 },
+  emptyText: { textAlign: 'center', color: '#a8a29e', marginTop: 40, fontFamily: 'serif' }
 });

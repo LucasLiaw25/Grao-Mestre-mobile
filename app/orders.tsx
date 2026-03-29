@@ -1,188 +1,76 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  Platform,
   StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Text, Surface, Divider } from 'react-native-paper';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import {
-  Package,
+  ShoppingBag,
   Clock,
   Minus,
   Plus,
   Trash2,
-  ShoppingBag,
   CheckCircle,
-  Loader2,
+  CreditCard,
+  QrCode,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Animated, {
-  Layout,
-  FadeIn,
-  FadeOut,
-  SlideInDown,
-  SlideOutDown,
-} from "react-native-reanimated";
-import { ordersApi } from "@/lib/api";
-import { formatCurrency } from "@/lib/format"; // Adapte para RN se necessário
-import { OrderResponseDTO, OrderStatus } from "@/types";
-import { useToast } from "@/hooks/use-toast"; // Assumindo que você tem um hook de toast adaptado para RN
-import { useNavigation } from "@react-navigation/native"; // Para navegação em React Native
 
-const getTailwindStyles = (tailwindString: string) => {
-  const styles: any = {};
-  const parts = tailwindString.split(" ");
+import { formatCurrency } from "@/src/lib/format";
+import { ordersApi } from "@/src/lib/api";
+import { OrderStatus, PaymentMethod } from "@/src/types";
 
-  parts.forEach((part) => {
-    if (part.startsWith("bg-")) {
-      const color = part.replace("bg-", "");
-      if (color === "background") styles.backgroundColor = "#ffffff";
-      else if (color === "muted/30") styles.backgroundColor = "rgba(245,245,244,0.3)"; // Assuming muted is stone-100
-      else if (color === "primary") styles.backgroundColor = "#292524"; // stone-800
-      else if (color === "yellow-100") styles.backgroundColor = "#fefce8";
-      else if (color === "yellow-800") styles.backgroundColor = "#92400e";
-      else if (color === "blue-100") styles.backgroundColor = "#dbeafe";
-      else if (color === "blue-800") styles.backgroundColor = "#1e40af";
-      else if (color === "green-100") styles.backgroundColor = "#d1fae5";
-      else if (color === "green-800") styles.backgroundColor = "#065f46";
-      else if (color === "indigo-100") styles.backgroundColor = "#e0e7ff";
-      else if (color === "indigo-800") styles.backgroundColor = "#3730a3";
-      else if (color === "red-100") styles.backgroundColor = "#fee2e2";
-      else if (color === "red-800") styles.backgroundColor = "#991b1b";
-      else if (color === "muted") styles.backgroundColor = "#f5f5f4";
-      else if (color === "destructive/10") styles.backgroundColor = "rgba(239,68,68,0.1)";
-    } else if (part.startsWith("text-")) {
-      const color = part.replace("text-", "");
-      if (color === "foreground") styles.color = "#0c0a09"; // stone-950
-      else if (color === "muted-foreground") styles.color = "#78716c"; // stone-500
-      else if (color === "primary") styles.color = "#292524";
-      else if (color === "yellow-800") styles.color = "#92400e";
-      else if (color === "blue-800") styles.color = "#1e40af";
-      else if (color === "green-800") styles.color = "#065f46";
-      else if (color === "indigo-800") styles.color = "#3730a3";
-      else if (color === "red-800") styles.color = "#991b1b";
-      else if (color === "destructive") styles.color = "#ef4444";
-    } else if (part.startsWith("border-")) {
-      const color = part.replace("border-", "");
-      if (color === "border/50") styles.borderColor = "rgba(229,231,235,0.5)"; // Assuming border is stone-200
-      else if (color === "border/30") styles.borderColor = "rgba(229,231,235,0.3)";
-    } else if (part.startsWith("px-")) {
-      styles.paddingHorizontal = parseInt(part.replace("px-", "")) * 4;
-    } else if (part.startsWith("py-")) {
-      styles.paddingVertical = parseInt(part.replace("py-", "")) * 4;
-    } else if (part.startsWith("p-")) {
-      styles.padding = parseInt(part.replace("p-", "")) * 4;
-    } else if (part.startsWith("pt-")) {
-      styles.paddingTop = parseInt(part.replace("pt-", "")) * 4;
-    } else if (part.startsWith("pb-")) {
-      styles.paddingBottom = parseInt(part.replace("pb-", "")) * 4;
-    } else if (part.startsWith("mb-")) {
-      styles.marginBottom = parseInt(part.replace("mb-", "")) * 4;
-    } else if (part.startsWith("mt-")) {
-      styles.marginTop = parseInt(part.replace("mt-", "")) * 4;
-    } else if (part.startsWith("gap-")) {
-      styles.gap = parseInt(part.replace("gap-", "")) * 4;
-    } else if (part.startsWith("w-")) {
-      styles.width = parseInt(part.replace("w-", "")) * 4;
-    } else if (part.startsWith("h-")) {
-      styles.height = parseInt(part.replace("h-", "")) * 4;
-    } else if (part.startsWith("rounded-")) {
-      if (part === "rounded-xl") styles.borderRadius = 12;
-      else if (part === "rounded-full") styles.borderRadius = 9999;
-    } else if (part === "flex") styles.display = "flex";
-    else if (part === "flex-col") styles.flexDirection = "column";
-    else if (part === "flex-row") styles.flexDirection = "row";
-    else if (part === "items-center") styles.alignItems = "center";
-    else if (part === "items-start") styles.alignItems = "flex-start";
-    else if (part === "justify-between") styles.justifyContent = "space-between";
-    else if (part === "justify-center") styles.justifyContent = "center";
-    else if (part === "flex-1") styles.flex = 1;
-    else if (part === "text-center") styles.textAlign = "center";
-    else if (part === "text-sm") styles.fontSize = 14;
-    else if (part === "text-xs") styles.fontSize = 12;
-    else if (part === "text-lg") styles.fontSize = 18;
-    else if (part === "text-xl") styles.fontSize = 20;
-    else if (part === "text-2xl") styles.fontSize = 24;
-    else if (part === "font-bold") styles.fontWeight = "700";
-    else if (part === "font-semibold") styles.fontWeight = "600";
-    else if (part === "font-medium") styles.fontWeight = "500";
-    else if (part === "font-serif") styles.fontFamily = Platform.OS === "ios" ? "Georgia" : "serif";
-    else if (part === "opacity-50") styles.opacity = 0.5;
-    else if (part === "last:border-b-0") styles.lastBorderB0 = {}; // Not directly translatable, needs custom logic
-    else if (part === "last:pb-0") styles.lastPb0 = {}; // Not directly translatable
-    else if (part === "disabled:opacity-50") styles.disabledOpacity50 = { opacity: 0.5 };
-    else if (part === "disabled:cursor-not-allowed") styles.disabledCursorNotAllowed = {}; // Not directly translatable
-    else if (part === "hover:bg-muted") styles.hoverBgMuted = { backgroundColor: "#f5f5f4" };
-    else if (part === "hover:bg-destructive/10") styles.hoverBgDestructive10 = { backgroundColor: "rgba(239,68,68,0.1)" };
-    else if (part === "section-label") styles.sectionLabel = { fontSize: 12, fontWeight: "600", color: "#78716c", textTransform: "uppercase", letterSpacing: 1 };
-    else if (part === "section-title") styles.sectionTitle = { fontSize: 30, fontWeight: "700", fontFamily: Platform.OS === "ios" ? "Georgia" : "serif", color: "#0c0a09", marginTop: 4 };
-    else if (part === "glass-card") styles.glassCard = {
-      backgroundColor: "rgba(255,255,255,0.6)",
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: "rgba(229,231,235,0.5)",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 4,
-    };
-  });
-
-  return StyleSheet.create(styles);
+const COLORS = {
+  background: "#fdfbf9",
+  cardBackground: "#ffffff",
+  primaryText: "#1c1917",
+  mutedText: "#78716c",
+  brandBrown: "#9a6333",
+  border: "#e7e5e4",
+  success: "#16a34a",
+  danger: "#dc2626",
 };
 
-export default function Orders() {
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendente",
+  PAID: "Pago",
+  COMPLETED: "Concluído",
+  PROCESSING: "Processando",
+  SENDED: "Enviado",
+  CANCELED: "Cancelado",
+};
+
+export default function OrdersScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const navigation = useNavigation();
+  const [page, setPage] = useState(0);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>(PaymentMethod.PIX);
 
-  const statusColor: Record<string, string> = {
-    PENDING: "bg-yellow-100 text-yellow-800",
-    PROCESSING: "bg-blue-100 text-blue-800",
-    PAID: "bg-green-100 text-green-800",
-    COMPLETED: "bg-green-100 text-green-800",
-    SENDED: "bg-indigo-100 text-indigo-800",
-    CANCELED: "bg-red-100 text-red-800",
-    RECUSE: "bg-red-100 text-red-800",
-  };
-
-  const { data: pendingOrder, isLoading: isLoadingPendingOrder } = useQuery<OrderResponseDTO | undefined>({
-    queryKey: ["pendingOrder"],
+  const { data: pendingOrders, isLoading: isLoadingPending } = useQuery({
+    queryKey: ["pendingOrders"],
     queryFn: async () => {
-      const response = await ordersApi.getMyOrdersByStatus("PENDING" as OrderStatus);
-      return response.data.length > 0 ? response.data[0] : undefined;
+      const res = await ordersApi.getMyOrdersByStatus(OrderStatus.PENDING);
+      return res.data;
     },
-    staleTime: 0,
-    refetchOnWindowFocus: true,
   });
 
-  const { data: orderHistory, isLoading: isLoadingOrderHistory } = useQuery<OrderResponseDTO[]>({
-    queryKey: ["orderHistory"],
-    queryFn: async () => {
-      const response = await ordersApi.getMyOrderHistory();
-      const allOrders = response.data;
-      return allOrders.filter(order => order.orderStatus !== "PENDING");
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const pendingOrder = useMemo(() => 
+    pendingOrders && pendingOrders.length > 0 ? pendingOrders[0] : null
+  , [pendingOrders]);
 
-  const removeItemMutation = useMutation({
-    mutationFn: ({ orderId, orderItemId }: { orderId: number; orderItemId: number }) =>
-      ordersApi.removeItemFromOrder(orderId, orderItemId),
-    onSuccess: () => {
-      toast({ title: "Item Removido", description: "Produto removido do seu carrinho." });
-      queryClient.invalidateQueries({ queryKey: ["pendingOrder"] });
-      queryClient.invalidateQueries({ queryKey: ["orderHistory"] });
-    },
-    onError: (err) => {
-      console.error("Erro ao remover item:", err);
-      toast({ title: "Erro", description: "Falha ao remover item. Tente novamente.", variant: "destructive" });
+  const { data: historyData, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ["orderHistory", page],
+    queryFn: async () => {
+      const res = await ordersApi.getMyOrderHistory({ page, size: 5 });
+      return res.data;
     },
   });
 
@@ -190,204 +78,318 @@ export default function Orders() {
     mutationFn: ({ orderId, orderItemId, quantity }: { orderId: number; orderItemId: number; quantity: number }) =>
       ordersApi.updateOrderItemQuantity(orderId, orderItemId, quantity),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pendingOrder"] });
-    },
-    onError: (err) => {
-      console.error("Erro ao atualizar quantidade:", err);
-      toast({ title: "Erro", description: "Falha ao atualizar quantidade. Tente novamente.", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["pendingOrders"] });
     },
   });
 
-  const finalizeOrderMutation = useMutation({
-    mutationFn: (orderId: number) =>
-      ordersApi.updateOrderStatus(orderId, OrderStatus.PROCESSING),
+  const removeItemMutation = useMutation({
+    mutationFn: ({ orderId, orderItemId }: { orderId: number; orderItemId: number }) =>
+      ordersApi.removeItemFromOrder(orderId, orderItemId),
     onSuccess: () => {
-      toast({ title: "Pedido Realizado!", description: "Seu pedido foi realizado com sucesso." });
-      queryClient.invalidateQueries({ queryKey: ["pendingOrder"] });
-      queryClient.invalidateQueries({ queryKey: ["orderHistory"] });
-      navigation.navigate("Orders");
-    },
-    onError: (err) => {
-      console.error("Erro ao finalizar pedido:", err);
-      toast({ title: "Erro", description: "Falha ao finalizar pedido. Tente novamente.", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["pendingOrders"] });
     },
   });
 
-  const handleRemoveItem = (orderId: number, orderItemId: number) => {
-    removeItemMutation.mutate({ orderId, orderItemId });
+  const finalizePaymentMutation = useMutation({
+    mutationFn: ({ orderId, paymentMethod }: { orderId: number; paymentMethod: PaymentMethod }) =>
+      ordersApi.finalizePayment(orderId, paymentMethod),
+    onSuccess: (response) => {
+      const checkoutUrl = (response.data as any).payment?.paymentUrl;
+
+      if (checkoutUrl) {
+        router.push({
+          pathname: "/checkout-webview",
+          params: { url: checkoutUrl }
+        });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["pendingOrders"] });
+        queryClient.invalidateQueries({ queryKey: ["orderHistory"] });
+        router.replace({ pathname: "/payment-status", params: { status: 'success' } });
+      }
+    },
+    onError: () => Alert.alert("Erro", "Falha ao processar o checkout."),
+  });
+
+  const handleFinalize = () => {
+    if (!pendingOrder) return;
+    finalizePaymentMutation.mutate({
+      orderId: pendingOrder.id,
+      paymentMethod: selectedPaymentMethod
+    });
   };
 
-  const handleUpdateQuantity = (orderId: number, orderItemId: number, currentQuantity: number, change: number) => {
-    const newQuantity = currentQuantity + change;
-    if (newQuantity < 1) {
-      handleRemoveItem(orderId, orderItemId);
-    } else {
-      updateQuantityMutation.mutate({ orderId, orderItemId, quantity: newQuantity });
-    }
-  };
-
-  const handleFinalizeOrder = () => {
-    if (pendingOrder && pendingOrder.id) {
-      finalizeOrderMutation.mutate(pendingOrder.id);
-    } else {
-      toast({ title: "Erro", description: "Nenhum item no seu carrinho para finalizar.", variant: "destructive" });
-    }
-  };
-
-  const isLoadingAny = isLoadingPendingOrder || isLoadingOrderHistory;
+  const cartTotal = useMemo(() => {
+    return pendingOrder?.items?.reduce((acc, item) => acc + item.subtotal, 0) ?? 0;
+  }, [pendingOrder]);
 
   return (
-    <SafeAreaView style={getTailwindStyles("min-h-screen bg-background").minHScreen}>
-      <ScrollView>
-        <View style={getTailwindStyles("pt-28 pb-12 bg-muted/30 border-b border-border/50").pt28}>
-          <View style={getTailwindStyles("max-w-4xl mx-auto px-4 sm:px-6 lg:px-8").px4}>
-            <Animated.View entering={FadeIn.duration(400).delay(0)}>
-              <Text style={getTailwindStyles("section-label").sectionLabel}>Minha Conta</Text>
-              <Text style={getTailwindStyles("section-title").sectionTitle}>Meus Pedidos</Text>
-            </Animated.View>
-          </View>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Meus Pedidos</Text>
+        <Text style={styles.headerSubtitle}>Gestão de Grãos & Torras</Text>
+      </View>
+
+      <Surface style={styles.card} elevation={1}>
+        <View style={styles.sectionHeader}>
+          <ShoppingBag size={20} color={COLORS.brandBrown} />
+          <Text style={styles.sectionTitle}>Carrinho Atual</Text>
         </View>
 
-        <View style={getTailwindStyles("py-16").py16}>
-          <View style={getTailwindStyles("max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12").px4}>
-            <Animated.View
-              entering={FadeIn.duration(400).delay(100)}
-              style={getTailwindStyles("glass-card p-6").glassCard}
-            >
-              <Text style={getTailwindStyles("font-serif text-2xl font-bold text-foreground mb-6 flex flex-row items-center gap-2").fontSerif}>
-                <ShoppingBag size={24} color={getTailwindStyles("", "text-primary").color} /> Seu Carrinho
-              </Text>
+        {isLoadingPending ? (
+          <ActivityIndicator color={COLORS.brandBrown} style={{ margin: 30 }} />
+        ) : (pendingOrder?.items?.length ?? 0) > 0 ? (
+          <View>
+            {pendingOrder?.items.map((item) => (
+              <View key={item.id} style={styles.cartItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemName}>{item.productName}</Text>
+                  <Text style={styles.itemPrice}>{formatCurrency(item.priceAtTime)}</Text>
+                </View>
+                <View style={styles.qtyContainer}>
+                  <TouchableOpacity 
+                    onPress={() => item.quantity > 1 
+                      ? updateQuantityMutation.mutate({ orderId: pendingOrder.id, orderItemId: item.id, quantity: item.quantity - 1 })
+                      : removeItemMutation.mutate({ orderId: pendingOrder.id, orderItemId: item.id })
+                    }
+                  >
+                    {item.quantity > 1 ? <Minus size={18} color={COLORS.brandBrown} /> : <Trash2 size={18} color={COLORS.danger} />}
+                  </TouchableOpacity>
+                  <Text style={styles.qtyText}>{item.quantity}</Text>
+                  <TouchableOpacity 
+                    onPress={() => updateQuantityMutation.mutate({ orderId: pendingOrder.id, orderItemId: item.id, quantity: item.quantity + 1 })}
+                  >
+                    <Plus size={18} color={COLORS.brandBrown} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
 
-              {isLoadingPendingOrder ? (
-                <View style={getTailwindStyles("h-24 bg-muted animate-pulse rounded-xl").h24} />
-              ) : pendingOrder && pendingOrder.items && pendingOrder.items.length > 0 ? (
-                <View style={getTailwindStyles("space-y-4").spaceY4}>
-                  {pendingOrder.items.map((item, index) => (
-                    <View
-                      key={item.id}
-                      style={[
-                        getTailwindStyles("flex flex-row items-center justify-between pb-4").flex,
-                        index < pendingOrder.items.length - 1 && getTailwindStyles("border-b border-border/50").borderB,
-                        index === pendingOrder.items.length - 1 && getTailwindStyles("last:border-b-0 last:pb-0").lastBorderB0,
-                      ]}
-                    >
-                      <View style={getTailwindStyles("flex-1").flex1}>
-                        <Text style={getTailwindStyles("font-medium text-foreground").fontMedium}>{item.productName}</Text>
-                        <Text style={getTailwindStyles("text-sm text-muted-foreground").textSm}>{formatCurrency(item.priceAtTime)} cada</Text>
-                      </View>
-                      <View style={getTailwindStyles("flex flex-row items-center gap-3").flex}>
-                        <TouchableOpacity
-                          onPress={() => handleUpdateQuantity(pendingOrder.id, item.id, item.quantity, -1)}
-                          disabled={removeItemMutation.isPending || updateQuantityMutation.isPending}
-                          style={getTailwindStyles("p-1 rounded transition-colors disabled:opacity-50").p1}
-                        >
-                          <Minus size={16} color={getTailwindStyles("", "text-foreground").color} />
-                        </TouchableOpacity>
-                        <Text style={getTailwindStyles("w-8 text-center font-semibold text-foreground").w8}>{item.quantity}</Text>
-                        <TouchableOpacity
-                          onPress={() => handleUpdateQuantity(pendingOrder.id, item.id, item.quantity, 1)}
-                          disabled={removeItemMutation.isPending || updateQuantityMutation.isPending}
-                          style={getTailwindStyles("p-1 rounded transition-colors disabled:opacity-50").p1}
-                        >
-                          <Plus size={16} color={getTailwindStyles("", "text-foreground").color} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveItem(pendingOrder.id, item.id)}
-                          disabled={removeItemMutation.isPending || updateQuantityMutation.isPending}
-                          style={getTailwindStyles("p-1 rounded text-destructive hover:bg-destructive/10").p1}
-                        >
-                          <Trash2 size={16} color={getTailwindStyles("", "text-destructive").color} />
-                        </TouchableOpacity>
-                      </View>
+            <Divider style={styles.divider} />
+
+            <Text style={styles.methodLabel}>Método de Pagamento</Text>
+            <View style={styles.methodRow}>
+              <TouchableOpacity 
+                style={[styles.methodBtn, selectedPaymentMethod === PaymentMethod.PIX && styles.methodBtnActive]}
+                onPress={() => setSelectedPaymentMethod(PaymentMethod.PIX)}
+              >
+                <QrCode size={18} color={selectedPaymentMethod === PaymentMethod.PIX ? "#fff" : COLORS.brandBrown} />
+                <Text style={[styles.methodBtnText, selectedPaymentMethod === PaymentMethod.PIX && { color: '#fff' }]}>PIX</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.methodBtn, selectedPaymentMethod === PaymentMethod.CREDIT_CARD && styles.methodBtnActive]}
+                onPress={() => setSelectedPaymentMethod(PaymentMethod.CREDIT_CARD)}
+              >
+                <CreditCard size={18} color={selectedPaymentMethod === PaymentMethod.CREDIT_CARD ? "#fff" : COLORS.brandBrown} />
+                <Text style={[styles.methodBtnText, selectedPaymentMethod === PaymentMethod.CREDIT_CARD && { color: '#fff' }]}>Cartão</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalAmount}>{formatCurrency(cartTotal)}</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.finalizeBtn} 
+              onPress={handleFinalize}
+              disabled={finalizePaymentMutation.isPending}
+            >
+              {finalizePaymentMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <CheckCircle size={20} color="#fff" />
+                  <Text style={styles.finalizeBtnText}>Finalizar Pagamento</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <ShoppingBag size={40} color={COLORS.mutedText} opacity={0.3} />
+            <Text style={styles.emptyText}>Seu carrinho está vazio.</Text>
+          </View>
+        )}
+      </Surface>
+
+      <View style={styles.historyContainer}>
+        <View style={styles.sectionHeader}>
+          <Clock size={20} color={COLORS.brandBrown} />
+          <Text style={styles.sectionTitle}>Histórico de Pedidos</Text>
+        </View>
+
+        {isLoadingHistory ? (
+          <ActivityIndicator color={COLORS.brandBrown} />
+        ) : (
+          <View style={{ gap: 12 }}>
+            {historyData?.content.map((order) => (
+              <Surface key={order.id} style={styles.historyCard} elevation={1}>
+                {/* Cabeçalho do Card */}
+                <View style={styles.historyHeader}>
+                  <View>
+                    <Text style={styles.orderNumber}>Pedido #{order.id}</Text>
+                    <View style={styles.historyDateRow}>
+                      <Clock size={14} color={COLORS.mutedText} />
+                      <Text style={styles.historyDate}>
+                        {new Date(order.orderDate).toLocaleDateString('pt-BR')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: order.orderStatus === 'PAID' ? '#f0fdf4' : '#f8f8f8' }, { backgroundColor: order.orderStatus === 'COMPLETED' ? '#c5f6d4' : '#f8f8f8' }]}>
+                    <Text style={[styles.statusBadgeText, { color: order.orderStatus === 'PAID' ? COLORS.success : COLORS.brandBrown }, { color: order.orderStatus === 'COMPLETED' ? COLORS.success : COLORS.brandBrown }]}>
+                      {STATUS_LABELS[order.orderStatus] || order.orderStatus}
+                    </Text>
+                  </View>
+                </View>
+
+                <Divider style={styles.historyDivider} />
+
+                {/* LISTA DE PRODUTOS (O que você pediu) */}
+                <View style={styles.historyItemsList}>
+                  {order.items.map((item) => (
+                    <View key={item.id} style={styles.historyItemRow}>
+                      <Text style={styles.historyItemText}>
+                        <Text style={styles.historyItemQty}>{item.quantity}x</Text> {item.productName}
+                      </Text>
+                      <Text style={styles.historyItemSubtotal}>{formatCurrency(item.subtotal)}</Text>
                     </View>
                   ))}
-                  <View style={getTailwindStyles("flex flex-row justify-between items-center pt-4 border-t border-border/50").flex}>
-                    <Text style={getTailwindStyles("text-lg font-bold text-foreground").textLg}>Total:</Text>
-                    <Text style={getTailwindStyles("text-2xl font-bold text-primary").text2xl}>{formatCurrency(pendingOrder.totalPrice)}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleFinalizeOrder}
-                    disabled={finalizeOrderMutation.isPending || pendingOrder.items.length === 0}
-                    style={getTailwindStyles("w-full mt-6 gap-2 flex flex-row items-center justify-center p-4 rounded-xl bg-primary disabled:opacity-50").wFull}
-                  >
-                    {finalizeOrderMutation.isPending ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <CheckCircle size={20} color="#fff" />
-                        <Text style={getTailwindStyles("text-white text-lg font-bold").textWhite}>Finalizar Pedido</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
                 </View>
-              ) : (
-                <View style={getTailwindStyles("text-center py-10").textCenter}>
-                  <ShoppingBag size={64} color={getTailwindStyles("", "text-muted-foreground").color} style={getTailwindStyles("mx-auto mb-6 opacity-50").mxAuto} />
-                  <Text style={getTailwindStyles("text-xl text-muted-foreground font-serif").textXl}>Seu carrinho está vazio.</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate("Products")} style={getTailwindStyles("mt-6 p-4 rounded-xl bg-primary").mt6}>
-                    <Text style={getTailwindStyles("text-white text-lg font-bold").textWhite}>Começar a Comprar</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </Animated.View>
 
-            <Animated.View
-              entering={FadeIn.duration(400).delay(200)}
-              style={getTailwindStyles("glass-card p-6").glassCard}
-            >
-              <Text style={getTailwindStyles("font-serif text-2xl font-bold text-foreground mb-6 flex flex-row items-center gap-2").fontSerif}>
-                <Clock size={24} color={getTailwindStyles("", "text-muted-foreground").color} /> Histórico de Pedidos
-              </Text>
+                <Divider style={styles.historyDivider} />
 
-              {isLoadingOrderHistory ? (
-                [1, 2].map((i) => (
-                  <View key={i} style={getTailwindStyles("h-32 bg-muted animate-pulse rounded-xl mb-4").h32} />
-                ))
-              ) : orderHistory && orderHistory.length > 0 ? (
-                <View style={getTailwindStyles("space-y-6").spaceY6}>
-                  {orderHistory.map((order, i) => (
-                    <Animated.View
-                      key={order.id}
-                      entering={FadeIn.duration(400).delay(i * 50)}
-                      layout={Layout.springify()}
-                      style={getTailwindStyles("border border-border/50 rounded-xl p-4 bg-background").border}
-                    >
-                      <View style={getTailwindStyles("flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3").flex}>
-                        <View>
-                          <Text style={getTailwindStyles("text-sm text-muted-foreground").textSm}>Pedido #{order.id}</Text>
-                          <Text style={getTailwindStyles("text-xs text-muted-foreground flex flex-row items-center gap-1 mt-1").textXs}>
-                            <Clock size={12} color={getTailwindStyles("", "text-muted-foreground").color} />
-                            {new Date(order.orderDate).toLocaleDateString()}
-                          </Text>
-                        </View>
-                        <View style={getTailwindStyles("flex flex-row items-center gap-3").flex}>
-                          <Text style={getTailwindStyles(`px-3 py-1 rounded-full text-xs font-semibold ${statusColor[order.orderStatus] || "bg-muted text-muted-foreground"}`).px3}>
-                            {order.orderStatus}
-                          </Text>
-                          <Text style={getTailwindStyles("text-lg font-bold text-foreground").textLg}>{formatCurrency(order.totalPrice)}</Text>
-                        </View>
-                      </View>
-                      <View style={getTailwindStyles("border-t border-border/30 pt-3 space-y-1").borderT}>
-                        {order.items.map((item) => (
-                          <View key={item.id} style={getTailwindStyles("flex flex-row justify-between text-sm").flex}>
-                            <Text style={getTailwindStyles("text-foreground").textForeground}>{item.productName} × {item.quantity}</Text>
-                            <Text style={getTailwindStyles("text-muted-foreground").textMutedForeground}>{formatCurrency(item.subtotal)}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </Animated.View>
-                  ))}
+                {/* Rodapé do Card */}
+                <View style={styles.historyFooter}>
+                  <Text style={styles.totalLabelSmall}>Valor Total</Text>
+                  <Text style={styles.historyTotal}>{formatCurrency(order.totalPrice)}</Text>
                 </View>
-              ) : (
-                <View style={getTailwindStyles("text-center py-10").textCenter}>
-                  <Package size={64} color={getTailwindStyles("", "text-muted-foreground").color} style={getTailwindStyles("mx-auto mb-6 opacity-50").mxAuto} />
-                  <Text style={getTailwindStyles("text-xl text-muted-foreground font-serif").textXl}>Nenhum pedido anterior encontrado.</Text>
-                </View>
-              )}
-            </Animated.View>
+              </Surface>
+            ))}
+
+            {historyData && historyData.totalPages > 1 && (
+              <View style={styles.pagination}>
+                <TouchableOpacity 
+                  disabled={page === 0} 
+                  onPress={() => setPage(p => p - 1)}
+                  style={[styles.pageBtn, page === 0 && { opacity: 0.3 }]}
+                >
+                  <ChevronLeft size={20} color={COLORS.primaryText} />
+                </TouchableOpacity>
+                <Text style={styles.pageIndicator}>{page + 1} de {historyData.totalPages}</Text>
+                <TouchableOpacity 
+                  disabled={page >= historyData.totalPages - 1} 
+                  onPress={() => setPage(p => p + 1)}
+                  style={[styles.pageBtn, page >= historyData.totalPages - 1 && { opacity: 0.3 }]}
+                >
+                  <ChevronRight size={20} color={COLORS.primaryText} />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        )}
+      </View>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: { padding: 24, paddingTop: 40 },
+  headerTitle: { fontSize: 32, fontWeight: 'bold', color: COLORS.primaryText, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' },
+  headerSubtitle: { fontSize: 13, color: COLORS.mutedText, textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 },
+  card: { 
+  margin: 16, 
+  backgroundColor: '#fff', 
+  borderRadius: 16, 
+  padding: 20, 
+  borderWidth: 1, // Corrigido de borderSize para borderWidth
+  borderColor: COLORS.border 
+},
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primaryText },
+  cartItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  itemName: { fontSize: 16, fontWeight: '600', color: COLORS.primaryText },
+  itemPrice: { fontSize: 14, color: COLORS.brandBrown, marginTop: 2 },
+  qtyContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fcfaf8', borderRadius: 8, padding: 6, gap: 12 },
+  qtyText: { fontSize: 15, fontWeight: 'bold', minWidth: 20, textAlign: 'center' },
+  divider: { marginVertical: 20, opacity: 0.5 },
+  methodLabel: { fontSize: 12, fontWeight: 'bold', color: COLORS.mutedText, textTransform: 'uppercase', marginBottom: 12 },
+  methodRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  methodBtn: { flex: 1, height: 48, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  methodBtnActive: { backgroundColor: COLORS.brandBrown, borderColor: COLORS.brandBrown },
+  methodBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.primaryText },
+  totalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  totalLabel: { fontSize: 16, color: COLORS.mutedText },
+  totalAmount: { fontSize: 24, fontWeight: 'bold', color: COLORS.primaryText },
+  finalizeBtn: { height: 56, backgroundColor: COLORS.primaryText, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  finalizeBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  emptyState: { alignItems: 'center', padding: 30 },
+  emptyText: { marginTop: 10, color: COLORS.mutedText, fontSize: 14 },
+  historyContainer: { padding: 16 },
+  historyCard: { 
+    backgroundColor: '#fff', 
+    padding: 16, 
+    borderRadius: 12, 
+    marginBottom: 16, 
+    borderWidth: 1, 
+    borderColor: COLORS.border 
+  },
+  historyHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start' 
+  },
+  historyDateRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 4, 
+    marginTop: 4 
+  },
+  historyDivider: { 
+    marginVertical: 12, 
+    opacity: 0.4 
+  },
+  historyItemsList: { 
+    gap: 8 
+  },
+  historyItemRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
+  },
+  historyItemText: { 
+    fontSize: 14, 
+    color: COLORS.primaryText, 
+    flex: 1 
+  },
+  historyItemQty: { 
+    fontWeight: 'bold', 
+    color: COLORS.brandBrown 
+  },
+  historyItemSubtotal: { 
+    fontSize: 14, 
+    color: COLORS.mutedText 
+  },
+  historyFooter: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
+  },
+  totalLabelSmall: { 
+    fontSize: 12, 
+    color: COLORS.mutedText, 
+    textTransform: 'uppercase' 
+  },
+  historyTotal: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: COLORS.primaryText 
+  },
+  orderNumber: { fontWeight: 'bold', fontSize: 14, color: COLORS.primaryText },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  statusBadgeText: { fontSize: 11, fontWeight: 'bold' },
+  historyDate: { fontSize: 13, color: COLORS.mutedText },
+  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 10 },
+  pageBtn: { padding: 10, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+  pageIndicator: { fontWeight: 'bold', color: COLORS.mutedText }
+});

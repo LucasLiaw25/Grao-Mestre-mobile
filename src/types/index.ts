@@ -55,6 +55,7 @@ export interface UserResponseDTO {
     phone: string;
     registerDate: string; // LocalDateTime no Java -> string ISO 8601 no TypeScript
     active: boolean;
+    addresses: AddressResponseDTO[]
     scopes: ScopeResponseDTO[];
 }
 
@@ -86,17 +87,25 @@ export interface OrderItemResponseDTO {
     productId: number;
     productName: string;
     quantity: number;
-    priceAtTime: number; // BigDecimal no Java -> number no TypeScript
-    subtotal: number; // BigDecimal no Java -> number no TypeScript
+    priceAtTime: number; 
+    subtotal: number; 
 }
 
 export interface PaymentResponseDTO {
     id: number;
     orderId: number;
+    dateCreated: string;
     paymentMethod: PaymentMethod;
     paymentStatus: PaymentStatus;
     txId: string;
-    totalPrice: number; // BigDecimal no Java -> number no TypeScript
+    totalPrice: number;
+    mpPaymentId: string;
+    mpPreferenceId: string;
+    qrCodeBase64: string;
+    qrCodeText: string;
+    paymentUrl: string;
+    dateOfExpiration: string;
+    dateApproved: string | null;
 }
 
 export interface OrderResponseDTO {
@@ -107,8 +116,8 @@ export interface OrderResponseDTO {
     orderStatus: OrderStatus;
     paymentMethod: PaymentMethod;
     payment: PaymentResponseDTO;
-    orderDate: string; // LocalDateTime no Java -> string ISO 8601 no TypeScript
-    totalPrice: number; // BigDecimal no Java -> number no TypeScript
+    orderDate: string;
+    totalPrice: number;
 }
 
 export interface AddressResponseDTO {
@@ -172,13 +181,14 @@ export interface UserRegisterRequestDTO {
     name: string;
     phone: string;
     password: string;
+    cpf: string;
 }
 
-export interface UserRequestDTO { // Para atualização de usuário
+export interface UserRequestDTO {
     email: string;
     name: string;
     phone: string;
-    password?: string; // Senha pode ser opcional na atualização, dependendo da lógica
+    password?: string;
     active?: boolean;
     scopeIds?: number[];
 }

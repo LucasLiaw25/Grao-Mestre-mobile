@@ -1,274 +1,228 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient"; // Para o efeito glass-card
-
-const useAuth = () => ({
-  login: async ({ email, password }: any) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        if (email === "admin@graomestre.com" && password === "password") {
-          resolve({ success: true });
-        } else {
-          reject(new Error("Invalid credentials"));
-        }
-      }, 1500);
-    });
-  },
-});
-
-const useToast = () => ({
-  toast: ({ title, description, variant }: any) => {
-    Alert.alert(title, description); // Usando Alert como fallback simples para toast
-  },
-});
+// login.tsx
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from "react-native";
+import { Text, TextInput, Button } from "react-native-paper";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import Animated, { FadeInUp, FadeIn } from "react-native-reanimated";
+import { useAuth } from "@/src/hooks/use-auth";
+import { useToast } from "@/src/hooks/usetoast";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
   const { login } = useAuth();
-  const navigation = useNavigation();
+  const router = useRouter();
+  const params = useLocalSearchParams();
   const { toast } = useToast();
 
-  // Animação para o card de login
-  const cardOpacity = useSharedValue(0);
-  const cardTranslateY = useSharedValue(20);
+  useEffect(() => {
+  if (params.signedUp === 'true') {
+    toast({
+      title: "Verifique seu e-mail",
+      description: "Enviamos um link de ativação para sua conta. Você precisa ativar antes de fazer login.",
+      variant: "default",
+    });
 
-  React.useEffect(() => {
-    cardOpacity.value = withTiming(1, { duration: 500 });
-    cardTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) });
-  }, []);
-
-  const animatedCardStyle = useAnimatedStyle(() => {
-    return {
-      opacity: cardOpacity.value,
-      transform: [{ translateY: cardTranslateY.value }],
-    };
-  });
+    router.setParams({ signedUp: undefined });
+  }
+}, [params.signedUp]);
 
   const handleSubmit = async () => {
+    if (!email || !password) {
+      toast({ title: "Erro", description: "Preencha todos os campos.", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
     try {
       await login({ email, password });
-      toast({ title: "Bem-vindo de volta!", description: "Você entrou com sucesso." });
-      navigation.navigate("AdminDashboard" as never); // Redireciona para o dashboard
-    } catch (error: any) {
-      toast({ title: "Erro", description: error.message || "Email ou senha inválidos.", variant: "destructive" });
+      toast({ title: "Bem-vindo!", description: "Login realizado com sucesso." });
+      router.replace("/(tabs)");
+    } catch (error) {
+      toast({ title: "Erro", description: "E-mail ou senha inválidos ou conta inativa.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.container}>
-          <Animated.View style={[styles.cardWrapper, animatedCardStyle]}>
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => navigation.navigate("Home" as never)}>
-                <Text style={styles.logoText}>Grão Mestre.</Text>
+        <Animated.View entering={FadeInUp.duration(600)} style={styles.cardContainer}>
+          <View style={styles.header}>
+            <Text style={styles.logo}>Grão Mestre</Text>
+            <Text variant="headlineSmall" style={styles.title}>Bem-vindo de volta</Text>
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Entre com suas credenciais para acessar sua conta
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>E-mail</Text>
+              <TextInput
+                mode="outlined"
+                placeholder="seu@email.com"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                outlineStyle={styles.inputOutline}
+                style={styles.input}
+                outlineColor="#e7e5e4"
+                activeOutlineColor="#292524"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Senha</Text>
+              <TextInput
+                mode="outlined"
+                placeholder="••••••••"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                outlineStyle={styles.inputOutline}
+                style={styles.input}
+                outlineColor="#e7e5e4"
+                activeOutlineColor="#292524"
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? "eye-off" : "eye"}
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
+              />
+              {/* Adicionado: Esqueceu a senha? */}
+              <TouchableOpacity onPress={() => router.push("/forgotPassword")} style={styles.forgotPasswordLink}>
+                <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
               </TouchableOpacity>
-              <Text style={styles.subtitle}>Entre na sua conta</Text>
             </View>
-
-            <LinearGradient
-              colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.glassCard}
+            <Button
+              mode="contained"
+              onPress={handleSubmit}
+              loading={isLoading}
+              disabled={isLoading}
+              style={styles.button}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
             >
-              <View style={styles.form}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Email</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                   
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="seu@email.com"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Senha</Text>
-                  <TextInput
-                    style={styles.input}
-                    secureTextEntry
-                    
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <TouchableOpacity
-                  style={[styles.button, isLoading && styles.buttonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.buttonText}>
-                    {isLoading ? "Entrando..." : "Entrar"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
+              {isLoading ? "Entrando..." : "Entrar"}
+            </Button>
+          </View>
 
-            <View style={styles.footerTextContainer}>
-              <Text style={styles.footerText}>
-                Não tem uma conta?{" "}
-                <Text
-                  style={styles.linkText}
-                  onPress={() => navigation.navigate("Register" as never)} // Assumindo uma rota de registro
-                >
-                  Crie uma
-                </Text>
-              </Text>
-            </View>
+          <Animated.View entering={FadeIn.delay(400)} style={styles.footer}>
+            <Text style={styles.footerText}>Não tem uma conta?</Text>
+            <TouchableOpacity onPress={() => router.push("/register")}>
+              <Text style={styles.linkText}>Crie uma</Text>
+            </TouchableOpacity>
           </Animated.View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </Animated.View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F8F8F8", // Cor de fundo suave
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
   container: {
-    flex: 1,
-    alignItems: "center",
+    flexGrow: 1,
+    backgroundColor: "#ffffff",
     justifyContent: "center",
-    paddingHorizontal: 20,
+    padding: 24,
   },
-  cardWrapper: {
+  cardContainer: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 400,
+    alignSelf: "center",
   },
   header: {
-    textAlign: "center",
-    marginBottom: 40,
     alignItems: "center",
+    marginBottom: 40,
   },
-  logoText: {
-    fontFamily: "serif", // Usando uma fonte serif para o toque old money
+  logo: {
+    fontFamily: "serif",
     fontSize: 32,
     fontWeight: "bold",
-    color: "#333",
-    fontStyle: "italic",
-    letterSpacing: -0.5,
+    color: "#1c1917",
+    marginBottom: 16,
+  },
+  title: {
+    fontWeight: "bold",
+    color: "#1c1917",
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 8,
-    fontFamily: "sans-serif",
-  },
-  glassCard: {
-    borderRadius: 16,
-    padding: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.15)", // Fundo semi-transparente
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)", // Borda mais clara
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 5,
-    backdropFilter: "blur(10px)", // Efeito de blur para o glassmorphism (requer polyfill ou expo-blur)
-    overflow: "hidden", // Garante que o gradiente não vaze
+    color: "#78716c",
+    textAlign: "center",
   },
   form: {
-    width: "100%",
     gap: 20,
   },
   inputGroup: {
-    width: "100%",
+    gap: 8,
   },
   label: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#333",
-    marginBottom: 8,
-    fontFamily: "sans-serif",
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#44403c",
+    marginLeft: 4,
   },
   input: {
-    width: "100%",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: "#FDFDFD",
+    backgroundColor: "#ffffff",
+  },
+  inputOutline: {
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    fontSize: 16,
-    color: "#333",
-    fontFamily: "sans-serif",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  },
+  forgotPasswordLink: { // Novo estilo para o link "Esqueceu a senha?"
+    alignSelf: 'flex-end',
+    marginTop: -4, // Ajuste para posicionar mais perto do input de senha
+    marginBottom: 8,
+  },
+  forgotPasswordText: { // Novo estilo para o texto "Esqueceu a senha?"
+    color: "#44403c",
+    fontSize: 13,
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
   button: {
-    width: "100%",
-    paddingVertical: 16,
-    backgroundColor: "#007AFF", // Cor primária
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
     marginTop: 10,
-    shadowColor: "#007AFF",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    borderRadius: 12,
+    backgroundColor: "#292524",
   },
-  buttonDisabled: {
-    backgroundColor: "#A0C8FF", // Cor mais clara para desabilitado
+  buttonContent: {
+    height: 52,
   },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "600",
-    fontFamily: "sans-serif",
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
   },
-  footerTextContainer: {
-    marginTop: 30,
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    marginTop: 32,
+    gap: 6,
   },
   footerText: {
+    color: "#78716c",
     fontSize: 14,
-    color: "#6B7280",
-    fontFamily: "sans-serif",
   },
   linkText: {
-    color: "#007AFF",
-    fontWeight: "600",
-    fontFamily: "sans-serif",
+    color: "#1c1917",
+    fontWeight: "bold",
+    fontSize: 14,
+    textDecorationLine: "underline",
   },
 });

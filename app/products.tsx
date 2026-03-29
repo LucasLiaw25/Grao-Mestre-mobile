@@ -1,331 +1,213 @@
-// app/products.tsx
 import React, { useState } from "react";
 import {
   View,
   Text,
+  StyleSheet,
+  FlatList,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
+  Image,
   ActivityIndicator,
-  useWindowDimensions,
-  Platform,
+  ScrollView,
+  Dimensions,
+  Platform
 } from "react-native";
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, Coffee } from "lucide-react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  withDelay,
-} from "react-native-reanimated";
-import { categoriesApi, productsApi } from "@/src/lib/api";
-import { CategoryResponseDTO, ProductResponseDTO } from "@/src/types";
-import { ProductCard } from "@/src/components/ProductCard";
+import { Search, Coffee } from "lucide-react-native";
+import { productsApi, categoriesApi } from "@/src/lib/api";
+import { ProductResponseDTO, CategoryResponseDTO } from "@/src/types";
+import { formatCurrency } from "@/src/lib/format";
 import { Footer } from "@/src/components/Footer";
+import { MotiView, MotiText, AnimatePresence } from "moti";
+import { Skeleton } from "moti/skeleton";
 
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = (width / 2) - 24;
 
-export default function Products() {
-  const { width } = useWindowDimensions();
-  const isLargeScreen = width >= 768;
+const COLORS = {
+  background: "#F7F5F2",
+  surface: "#FFFFFF",
+  primaryText: "#2C2826",
+  brandBrown: "#9A5B32",
+  mutedText: "#8A847D",
+  border: "#E5E0D8",
+  badgeBg: "#EFEFEF",
+};
 
+// Componente de Skeleton para o Estilo Old Money
+const ProductSkeleton = () => (
+  <View style={styles.cardContainer}>
+    <Skeleton colorMode="light" width={CARD_WIDTH} height={CARD_WIDTH * 1.33} radius={16} />
+    <View style={{ marginTop: 12 }}>
+      <Skeleton colorMode="light" width={CARD_WIDTH * 0.8} height={20} />
+      <View style={{ height: 8 }} />
+      <Skeleton colorMode="light" width={CARD_WIDTH * 0.5} height={16} />
+    </View>
+  </View>
+);
+
+export default function ProductsScreen() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
 
-  const { data: products, isLoading } = useQuery<ProductResponseDTO[]>({
+  const { data: products, isLoading: isLoadingProducts } = useQuery<ProductResponseDTO[]>({
     queryKey: ["products"],
-    queryFn: async () => (await productsApi.getAll()).data,
+    queryFn: async () => {
+      const response = await productsApi.getAll();
+      const data = response.data as any;
+      return data.content || data;
+    },
   });
 
   const { data: categories } = useQuery<CategoryResponseDTO[]>({
     queryKey: ["categories"],
-    queryFn: async () => (await categoriesApi.getAll()).data,
+    queryFn: async () => {
+      const response = await categoriesApi.getAll();
+      const data = response.data as any;
+      return data.content || data;
+    },
   });
 
-  const filtered = products?.filter((p) => {
-    const matchesSearch =
-      !searchTerm ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredProducts = products?.filter((p) => {
+    const matchesSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || p.category?.id === selectedCategory;
     return matchesSearch && matchesCategory && p.active;
   });
 
-  // Animações para o header e produtos
-  const headerOpacity = useSharedValue(0);
-  const headerTranslateY = useSharedValue(20);
-  const productsOpacity = useSharedValue(0);
-  const productsTranslateY = useSharedValue(20);
+  const renderHeader = () => (
+    <MotiView 
+      from={{ opacity: 0, translateY: -20 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 600 }}
+      style={styles.headerContainer}
+    >
+      <Text style={styles.sectionLabel}>NOSSA COLEÇÃO</Text>
+      <Text style={styles.sectionTitle}>Shop Café</Text>
 
-  React.useEffect(() => {
-    // Animação do cabeçalho (sem delay inicial)
-    headerOpacity.value = withTiming(1, { duration: 600 });
-    headerTranslateY.value = withTiming(0, { duration: 600, easing: Easing.out(Easing.ease) });
-
-    // Animação dos produtos (com delay de 200ms)
-    productsOpacity.value = withDelay(
-      200, // Atraso de 200ms
-      withTiming(1, { duration: 600 })
-    );
-    productsTranslateY.value = withDelay(
-      200, // Atraso de 200ms
-      withTiming(0, { duration: 600, easing: Easing.out(Easing.ease) })
-    );
-  }, []); // Dependência vazia para rodar apenas uma vez ao montar o componente
-
-  const animatedHeaderStyle = useAnimatedStyle(() => {
-    return {
-      opacity: headerOpacity.value,
-      transform: [{ translateY: headerTranslateY.value }],
-    };
-  });
-
-  const animatedProductsStyle = useAnimatedStyle(() => {
-    return {
-      opacity: productsOpacity.value,
-      transform: [{ translateY: productsTranslateY.value }],
-    };
-  });
-
-  return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerSection}>
-        <View style={styles.contentWrapper}>
-          <Animated.View style={animatedHeaderStyle}>
-            <Text style={styles.sectionLabel}>Our Collection</Text>
-            <Text style={styles.sectionTitle}>Shop Coffee</Text>
-          </Animated.View>
-
-          {/* Search & Filters */}
-          <Animated.View
-            style={[
-              styles.searchFilterContainer,
-              animatedHeaderStyle, // Reutilizando a animação para aparecer junto
-            ]}
-          >
-            <View style={styles.searchInputWrapper}>
-              <Search size={20} color="#6B7280" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search coffees..."
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryButtonsScroll}
-            >
-              <TouchableOpacity
-                onPress={() => setSelectedCategory(null)}
-                style={[
-                  styles.categoryButton,
-                  !selectedCategory && styles.categoryButtonActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryButtonText,
-                    !selectedCategory && styles.categoryButtonTextActive,
-                  ]}
-                >
-                  All
-                </Text>
-              </TouchableOpacity>
-              {categories?.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() =>
-                    setSelectedCategory(cat.id === selectedCategory ? null : cat.id)
-                  }
-                  style={[
-                    styles.categoryButton,
-                    selectedCategory === cat.id && styles.categoryButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryButtonText,
-                      selectedCategory === cat.id && styles.categoryButtonTextActive,
-                    ]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Animated.View>
-        </View>
+      <View style={styles.searchContainer}>
+        <Search size={20} color={COLORS.mutedText} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Procure cafés..."
+          placeholderTextColor={COLORS.mutedText}
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
       </View>
 
-      {/* Products Grid */}
-      <View style={styles.productsSection}>
-        <View style={styles.contentWrapper}>
-          {isLoading ? (
-            <View
-              style={[
-                styles.productsGrid,
-                isLargeScreen && styles.productsGridLarge,
-              ]}
-            >
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <View key={i} style={styles.productCardPlaceholder} />
-              ))}
-            </View>
-          ) : filtered && filtered.length > 0 ? (
-            <Animated.View
-              style={[
-                styles.productsGrid,
-                isLargeScreen && styles.productsGridLarge,
-                animatedProductsStyle,
-              ]}
-            >
-              {filtered.map((product, index) => (
-                <ProductCard key={product.id} product={product} index={index} />
-              ))}
-            </Animated.View>
-          ) : (
-            <View style={styles.noProductsMessage}>
-              <Coffee size={48} color="#9CA3AF" style={styles.noProductsIcon} />
-              <Text style={styles.noProductsText}>
-                No coffees found matching your criteria.
-              </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScroll}>
+        <TouchableOpacity
+          style={[styles.categoryPill, !selectedCategory && styles.categoryPillActive]}
+          onPress={() => setSelectedCategory(null)}
+        >
+          <Text style={[styles.categoryPillText, !selectedCategory && styles.categoryPillTextActive]}>All</Text>
+        </TouchableOpacity>
+        {categories?.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[styles.categoryPill, selectedCategory === cat.id && styles.categoryPillActive]}
+            onPress={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+          >
+            <Text style={[styles.categoryPillText, selectedCategory === cat.id && styles.categoryPillTextActive]}>
+              {cat.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </MotiView>
+  );
+
+  const renderProductCard = ({ item, index }: { item: ProductResponseDTO, index: number }) => (
+    <MotiView
+      from={{ opacity: 0, scale: 0.9, translateY: 0 }}
+      animate={{ opacity: 1, scale: 1, translateY: 20 }}
+      transition={{ 
+        type: 'spring', 
+        delay: index * 10, 
+        damping: 60 
+      }}
+    >
+      <TouchableOpacity 
+        style={styles.cardContainer} 
+        activeOpacity={0.8}
+        onPress={() => router.push({ pathname: "/product-detail", params: { id: item.id } })}
+      >
+        <View style={styles.imageWrapper}>
+          {item.category && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.category.name}</Text>
             </View>
           )}
+          <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
         </View>
-      </View>
 
-      <Footer />
-    </ScrollView>
+        <View style={styles.cardContent}>
+          <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.productDescription} numberOfLines={2}>{item.description}</Text>
+          <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
+        </View>
+      </TouchableOpacity>
+    </MotiView>
+  );
+
+  return (
+    <View style={styles.container}>
+      <AnimatePresence>
+        {isLoadingProducts ? (
+          <View style={styles.loaderGrid}>
+            {[1, 2, 3, 4].map((i) => <ProductSkeleton key={i} />)}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredProducts}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderProductCard}
+            numColumns={2}
+            ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            columnWrapperStyle={styles.columnWrapper}
+            ListFooterComponent={<Footer />}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} style={styles.emptyState}>
+                <Coffee size={48} color={COLORS.border} />
+                <Text style={styles.emptyStateText}>No coffees found.</Text>
+              </MotiView>
+            }
+          />
+        )}
+      </AnimatePresence>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB", // bg-background
-  },
-  contentWrapper: {
-    maxWidth: 1120, // max-w-7xl
-    marginHorizontal: "auto", // mx-auto
-    paddingHorizontal: 16, // px-4 sm:px-6 lg:px-8
-  },
-  headerSection: {
-    paddingTop: Platform.OS === "ios" ? 120 : 90, // Ajuste para navbar fixa
-    paddingBottom: 24, // pb-12
-    backgroundColor: "rgba(243, 244, 246, 0.3)", // bg-muted/30
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(229, 231, 235, 0.5)", // border-border/50
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B4F4F", // text-primary
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 8, // mb-2
-  },
-  sectionTitle: {
-    fontFamily: "serif",
-    fontSize: 36, // text-4xl md:text-5xl
-    fontWeight: "bold",
-    color: "#333333", // text-foreground
-    marginBottom: 24, // mb-8
-  },
-  searchFilterContainer: {
-    flexDirection: "column", // flex-col sm:flex-row
-    gap: 16, // gap-4
-  },
-  searchInputWrapper: {
-    position: "relative",
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  searchIcon: {
-    position: "absolute",
-    left: 16, // left-4
-  },
-  searchInput: {
-    flex: 1,
-    paddingLeft: 48, // pl-12
-    paddingRight: 16, // pr-4
-    paddingVertical: 12, // py-3
-    backgroundColor: "#FFFFFF", // bg-background
-    borderWidth: 1,
-    borderColor: "#E5E7EB", // border-border
-    borderRadius: 12, // rounded-xl
-    fontSize: 16,
-    color: "#333333", // text-foreground
-  },
-  categoryButtonsScroll: {
-    flexDirection: "row",
-    gap: 8, // gap-2
-    paddingVertical: 4, // Para dar um respiro ao scroll horizontal
-  },
-  categoryButton: {
-    paddingHorizontal: 16, // px-4
-    paddingVertical: 12, // py-3
-    borderRadius: 12, // rounded-xl
-    borderWidth: 1,
-    borderColor: "#E5E7EB", // border-border
-    backgroundColor: "#FFFFFF", // bg-background
-  },
-  categoryButtonActive: {
-    backgroundColor: "#6B4F4F", // bg-primary
-    borderColor: "#6B4F4F",
-  },
-  categoryButtonText: {
-    fontSize: 14, // text-sm
-    fontWeight: "500", // font-medium
-    color: "#6B7280", // text-muted-foreground
-  },
-  categoryButtonTextActive: {
-    color: "#FFFFFF", // text-primary-foreground
-  },
-  productsSection: {
-    paddingVertical: 64, // py-16
-  },
-  productsGrid: {
-    flexDirection: "column", // grid grid-cols-1
-    gap: 24, // gap-8
-  },
-  productsGridLarge: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between", // Ajuste para 2 ou 3 colunas
-  },
-  productCardPlaceholder: {
-    aspectRatio: 3 / 4, // aspect-[3/4]
-    backgroundColor: "#E5E7EB", // bg-muted
-    borderRadius: 16, // rounded-2xl
-    opacity: 0.7, // animate-pulse
-    width: "100%", // Para mobile, 100% da largura
-  },
-  noProductsMessage: {
-    paddingVertical: 80, // py-20
-    backgroundColor: "rgba(255, 255, 255, 0.8)", // glass-card
-    borderWidth: 1,
-    borderColor: "rgba(229, 231, 235, 0.5)", // border-dashed
-    borderStyle: "dashed",
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 16,
-  },
-  noProductsIcon: {
-    marginBottom: 16, // mb-4
-    opacity: 0.5,
-  },
-  noProductsText: {
-    fontSize: 20, // text-xl
-    color: "#6B7280", // text-muted-foreground
-    fontFamily: "serif",
-    textAlign: "center",
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loaderGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16, paddingTop: 100 },
+  listContent: { paddingTop: 20, paddingBottom: 40 },
+  columnWrapper: { justifyContent: 'space-between', paddingHorizontal: 16 },
+  headerContainer: { paddingHorizontal: 16, marginBottom: 24, paddingTop: 40 },
+  sectionLabel: { fontSize: 12, fontWeight: 'bold', color: COLORS.brandBrown, letterSpacing: 1.5, marginBottom: 8 },
+  sectionTitle: { fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 36, fontWeight: 'bold', color: COLORS.primaryText, marginBottom: 24 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, height: 50, marginBottom: 16 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 15, color: COLORS.primaryText },
+  categoriesScroll: { gap: 10 },
+  categoryPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  categoryPillActive: { backgroundColor: COLORS.brandBrown, borderColor: COLORS.brandBrown },
+  categoryPillText: { fontSize: 14, color: COLORS.mutedText, fontWeight: '500' },
+  categoryPillTextActive: { color: '#FFFFFF', fontWeight: 'bold' },
+  cardContainer: { width: CARD_WIDTH, marginBottom: 24 },
+  imageWrapper: { width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: COLORS.border },
+  productImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  badge: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, zIndex: 10 },
+  badgeText: { fontSize: 10, fontWeight: 'bold', color: COLORS.primaryText, textTransform: 'uppercase' },
+  cardContent: { paddingHorizontal: 4 },
+  productName: { fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontSize: 18, fontWeight: 'bold', color: COLORS.primaryText, marginBottom: 6 },
+  productDescription: { fontSize: 13, color: COLORS.mutedText, lineHeight: 18, marginBottom: 10 },
+  productPrice: { fontSize: 16, fontWeight: 'bold', color: COLORS.brandBrown },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyStateText: { fontFamily: 'serif', fontSize: 18, color: COLORS.mutedText, marginTop: 16 }
 });

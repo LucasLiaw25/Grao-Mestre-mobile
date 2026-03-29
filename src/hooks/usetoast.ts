@@ -1,12 +1,13 @@
 import * as React from "react";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 5000; // Reduzi para 5 segundos (estava muito alto)
 
 export interface ReactNativeToastProps {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  variant?: "default" | "destructive"; // Adicionado para suportar o design web
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -80,7 +81,9 @@ export const reducer = (state: State, action: Action): State => {
     case "UPDATE_TOAST":
       return {
         ...state,
-        toasts: state.toasts.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t)),
+        toasts: state.toasts.map((t) =>
+          t.id === action.toast.id ? { ...t, ...action.toast } : t
+        ),
       };
 
     case "DISMISS_TOAST": {
@@ -102,7 +105,7 @@ export const reducer = (state: State, action: Action): State => {
                 ...t,
                 open: false,
               }
-            : t,
+            : t
         ),
       };
     }
@@ -131,6 +134,7 @@ function dispatch(action: Action) {
   });
 }
 
+// Omitimos o 'id' pois ele é gerado internamente pelo genId()
 type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
@@ -173,7 +177,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+  }, []); // Removido 'state' da dependência para evitar loops
 
   return {
     ...state,

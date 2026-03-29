@@ -1,1027 +1,595 @@
 import React, { useState, useMemo } from "react";
 import {
   View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  Alert,
-  Platform,
   StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  Eye,
-  Edit,
-  Filter,
-  Loader2,
-  FileText,
-  ShoppingBag,
-  Users,
+  Text,
+  Surface,
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  Portal,
+  Button,
+  Divider,
+} from "react-native-paper";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, formatISO } from "date-fns";
+import {
   Clock,
+  RefreshCw,
   CheckCircle2,
   XCircle,
-  AlertCircle,
-  RefreshCw,
+  Filter,
+  Search,
+  Eye,
+  Edit,
+  User,
+  Calendar,
+  CreditCard,
+  Package,
+  X,
   Send,
   Ban,
-  X,
-  TrendingUp,
-  Package,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Animated, {
-  Layout,
-  FadeIn,
-  FadeOut,
-  SlideInDown,
-  SlideOutDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { MotiView } from "moti";
+
+import { ordersApi, usersApi, financialReportsApi } from "@/src/lib/api";
+import { formatCurrency } from "@/src/lib/format";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"; // Assumindo que você tem um componente de Dialog adaptado para RN
-import { Switch } from "@/components/ui/switch"; // Assumindo que você tem um componente de Switch adaptado para RN
-import { useToast } from "@/hooks/use-toast"; // Assumindo que você tem um hook de toast adaptado para RN
-import { ordersApi, usersApi } from "@/lib/api";
-import { formatCurrency } from "@/lib/format"; // Adapte para RN se necessário
-import type {
-  OrderResponseDTO,
   OrderStatus,
   TimePeriod,
-  PaymentMethod,
+  OrderResponseDTO,
   PageableResponse,
   UserResponseDTO,
-} from "@/types";
-import { Pagination } from "@/components/Pagination"; // Adapte para RN se necessário
-import OrderDetailsModal from "@/components/OrderDetailModal"; // Adapte para RN se necessário
+} from "@/src/types";
 
-type StatusFilter = "ALL" | OrderStatus;
+const { width } = Dimensions.get("window");
 
-const STATUS_FILTER_CONFIG: {
-  value: StatusFilter;
-  label: string;
-  activeClass: string;
-  icon: React.ReactNode;
-  badgeClass: string;
-}[] = [
-  {
-    value: "ALL",
-    label: "Todos",
-    activeClass: "bg-stone-800 text-amber-50 border-stone-800",
-    icon: <Package size={14} color="#a8a29e" />,
-    badgeClass: "bg-stone-200 text-stone-700",
-  },
-  {
-    value: OrderStatus.PENDING,
-    label: "Pendente",
-    activeClass: "bg-amber-700 text-amber-50 border-amber-700",
-    icon: <Clock size={14} color="#f59e0b" />,
-    badgeClass: "bg-amber-100 text-amber-800",
-  },
-  {
-    value: OrderStatus.PROCESSING,
-    label: "Processando",
-    activeClass: "bg-indigo-700 text-indigo-50 border-indigo-700",
-    icon: <RefreshCw size={14} color="#4f46e5" />,
-    badgeClass: "bg-indigo-100 text-indigo-800",
-  },
-  {
-    value: OrderStatus.PAID,
-    label: "Pago",
-    activeClass: "bg-emerald-700 text-emerald-50 border-emerald-700",
-    icon: <CheckCircle2 size={14} color="#10b981" />,
-    badgeClass: "bg-emerald-100 text-emerald-800",
-  },
-  {
-    value: OrderStatus.COMPLETED,
-    label: "Concluído",
-    activeClass: "bg-teal-700 text-teal-50 border-teal-700",
-    icon: <CheckCircle2 size={14} color="#14b8a6" />,
-    badgeClass: "bg-teal-100 text-teal-800",
-  },
-  {
-    value: OrderStatus.SENDED,
-    label: "Enviado",
-    activeClass: "bg-blue-700 text-blue-50 border-blue-700",
-    icon: <Send size={14} color="#3b82f6" />,
-    badgeClass: "bg-blue-100 text-blue-800",
-  },
-  {
-    value: OrderStatus.CANCELED,
-    label: "Cancelado",
-    activeClass: "bg-red-800 text-red-50 border-red-800",
-    icon: <XCircle size={14} color="#ef4444" />,
-    badgeClass: "bg-red-100 text-red-800",
-  },
-  {
-    value: OrderStatus.RECUSE,
-    label: "Recusado",
-    activeClass: "bg-rose-800 text-rose-50 border-rose-800",
-    icon: <Ban size={14} color="#e11d48" />,
-    badgeClass: "bg-rose-100 text-rose-800",
-  },
-];
+const STATUS_CONFIG = {
+  [OrderStatus.PENDING]: { label: "Pendente", bg: "#fef3c7", text: "#b45309", icon: Clock },
+  [OrderStatus.PROCESSING]: { label: "Processando", bg: "#e0e7ff", text: "#3730a3", icon: RefreshCw },
+  [OrderStatus.PAID]: { label: "Pago", bg: "#d1fae5", text: "#047857", icon: CheckCircle2 },
+  [OrderStatus.COMPLETED]: { label: "Concluído", bg: "#dcfce7", text: "#15803d", icon: CheckCircle2 },
+  [OrderStatus.SENDED]: { label: "Enviado", bg: "#cffafe", text: "#0f766e", icon: Send },
+  [OrderStatus.CANCELED]: { label: "Cancelado", bg: "#fee2e2", text: "#b91c1c", icon: XCircle },
+  [OrderStatus.RECUSE]: { label: "Recusado", bg: "#ffe4e6", text: "#be123c", icon: Ban },
+};
 
-const TIME_PERIOD_CONFIG: {
-  value: TimePeriod | "ALL";
-  label: string;
-}[] = [
+const PERIODS = [
   { value: "ALL", label: "Todo período" },
   { value: TimePeriod.TODAY, label: "Hoje" },
   { value: TimePeriod.YESTERDAY, label: "Ontem" },
   { value: TimePeriod.THIS_WEEK, label: "Esta semana" },
-  { value: TimePeriod.LAST_WEEK, label: "Semana passada" },
   { value: TimePeriod.THIS_MONTH, label: "Este mês" },
-  { value: TimePeriod.LAST_MONTH, label: "Mês passado" },
-  { value: TimePeriod.CUSTOM, label: "Personalizado" },
+  { value: "CUSTOM", label: "Personalizado" },
 ];
 
-const STATUS_STYLE_MAP: Record<OrderStatus, string> = {
-  [OrderStatus.PENDING]: "bg-amber-50 text-amber-800 border border-amber-200",
-  [OrderStatus.PROCESSING]: "bg-indigo-50 text-indigo-800 border border-indigo-200",
-  [OrderStatus.PAID]: "bg-emerald-50 text-emerald-800 border border-emerald-200",
-  [OrderStatus.COMPLETED]: "bg-teal-50 text-teal-800 border border-teal-200",
-  [OrderStatus.SENDED]: "bg-blue-50 text-blue-800 border border-blue-200",
-  [OrderStatus.CANCELED]: "bg-red-50 text-red-800 border border-red-200",
-  [OrderStatus.RECUSE]: "bg-rose-50 text-rose-800 border border-rose-200",
-};
+function getTodayStr() {
+  return format(new Date(), "yyyy-MM-dd");
+}
 
-const METRIC_CONFIG = [
-  {
-    status: OrderStatus.PENDING,
-    label: "Pendentes",
-    icon: <Clock size={16} color="#f59e0b" />,
-    colorClass: "text-amber-700",
-    bgClass: "bg-amber-50 border-amber-100",
-    iconBg: "bg-amber-100",
-  },
-  {
-    status: OrderStatus.PROCESSING,
-    label: "Processando",
-    icon: <RefreshCw size={16} color="#4f46e5" />,
-    colorClass: "text-indigo-700",
-    bgClass: "bg-indigo-50 border-indigo-100",
-    iconBg: "bg-indigo-100",
-  },
-  {
-    status: OrderStatus.COMPLETED,
-    label: "Concluídos",
-    icon: <CheckCircle2 size={16} color="#14b8a6" />,
-    colorClass: "text-teal-700",
-    bgClass: "bg-teal-50 border-teal-100",
-    iconBg: "bg-teal-100",
-  },
-  {
-    status: OrderStatus.CANCELED,
-    label: "Cancelados",
-    icon: <XCircle size={16} color="#dc2626" />,
-    colorClass: "text-red-700",
-    bgClass: "bg-red-50 border-red-100",
-    iconBg: "bg-red-100",
-  },
-];
+function calculateDateRange(period: TimePeriod) {
+  let start: Date | undefined;
+  let end: Date | undefined;
+  const now = new Date();
 
-const getTailwindStyles = (tailwindString: string) => {
-  const styles: any = {};
-  const parts = tailwindString.split(" ");
+  switch (period) {
+    case TimePeriod.TODAY:
+      start = startOfDay(now);
+      end = endOfDay(now);
+      break;
+    case TimePeriod.YESTERDAY:
+      start = startOfDay(subDays(now, 1));
+      end = endOfDay(subDays(now, 1));
+      break;
+    case TimePeriod.THIS_WEEK:
+      start = startOfWeek(now, { weekStartsOn: 0 }); // 0 para Domingo, 1 para Segunda-feira
+      end = endOfWeek(now, { weekStartsOn: 0 });
+      break;
+    case TimePeriod.THIS_MONTH:
+      start = startOfMonth(now);
+      end = endOfMonth(now);
+      break;
+    // Adicione outros períodos conforme necessário
+    default:
+      break;
+  }
 
-  parts.forEach((part) => {
-    if (part.startsWith("bg-")) {
-      const color = part.replace("bg-", "");
-      if (color === "stone-800") styles.backgroundColor = "#292524";
-      else if (color === "stone-900") styles.backgroundColor = "#1c1917";
-      else if (color === "amber-50") styles.backgroundColor = "#fffbeb";
-      else if (color === "emerald-700") styles.backgroundColor = "#047857";
-      else if (color === "emerald-50") styles.backgroundColor = "#ecfdf5";
-      else if (color === "red-800") styles.backgroundColor = "#991b1b";
-      else if (color === "red-50") styles.backgroundColor = "#fef2f2";
-      else if (color === "stone-200") styles.backgroundColor = "#e7e5e4";
-      else if (color === "emerald-100") styles.backgroundColor = "#d1fae5";
-      else if (color === "red-100") styles.backgroundColor = "#fee2e2";
-      else if (color === "stone-50") styles.backgroundColor = "#fafaf9";
-      else if (color === "indigo-50") styles.backgroundColor = "#eef2ff";
-      else if (color === "blue-50") styles.backgroundColor = "#eff6ff";
-      else if (color === "teal-50") styles.backgroundColor = "#f0fdfa";
-      else if (color === "white/20") styles.backgroundColor = "rgba(255,255,255,0.2)";
-      else if (color === "stone-100") styles.backgroundColor = "#f5f5f4";
-      else if (color === "background") styles.backgroundColor = "#ffffff"; // Default background
-      else if (color === "card") styles.backgroundColor = "#ffffff"; // Default card background
-      else if (color === "amber-700") styles.backgroundColor = "#b45309";
-      else if (color === "indigo-700") styles.backgroundColor = "#4338ca";
-      else if (color === "teal-700") styles.backgroundColor = "#0f766e";
-      else if (color === "blue-700") styles.backgroundColor = "#1d4ed8";
-      else if (color === "rose-800") styles.backgroundColor = "#9f1239";
-      else if (color === "rose-50") styles.backgroundColor = "#fff1f2";
-      else if (color === "rose-100") styles.backgroundColor = "#ffe4e6";
-      else if (color === "amber-200") styles.backgroundColor = "#fde68a";
-      else if (color === "indigo-200") styles.backgroundColor = "#c7d2fe";
-      else if (color === "emerald-200") styles.backgroundColor = "#a7f3d0";
-      else if (color === "teal-200") styles.backgroundColor = "#99f6e4";
-      else if (color === "blue-200") styles.backgroundColor = "#bfdbfe";
-      else if (color === "red-200") styles.backgroundColor = "#fecaca";
-      else if (color === "rose-200") styles.backgroundColor = "#fbcfe8";
-    } else if (part.startsWith("text-")) {
-      const color = part.replace("text-", "");
-      if (color === "amber-50") styles.color = "#fffbeb";
-      else if (color === "stone-700") styles.color = "#44403c";
-      else if (color === "emerald-50") styles.color = "#ecfdf5";
-      else if (color === "emerald-800") styles.color = "#065f46";
-      else if (color === "red-50") styles.color = "#fef2f2";
-      else if (color === "red-800") styles.color = "#991b1b";
-      else if (color === "indigo-700") styles.color = "#4338ca";
-      else if (color === "blue-700") styles.color = "#1d4ed8";
-      else if (color === "teal-700") styles.color = "#0f766e";
-      else if (color === "stone-500") styles.color = "#78716c";
-      else if (color === "amber-700") styles.color = "#b45309";
-      else if (color === "foreground") styles.color = "#0c0a09"; // Default foreground
-      else if (color === "stone-600") styles.color = "#57534e";
-      else if (color === "red-600") styles.color = "#dc2626";
-      else if (color === "stone-400") styles.color = "#a8a29e";
-      else if (color === "amber-800") styles.color = "#92400e";
-      else if (color === "indigo-800") styles.color = "#3730a3";
-      else if (color === "teal-800") styles.color = "#065f46";
-      else if (color === "blue-800") styles.color = "#1e40af";
-      else if (color === "rose-800") styles.color = "#9f1239";
-      else if (color === "red-700") styles.color = "#b91c1c";
-      else if (color === "stone-300") styles.color = "#d6d3d1";
-    } else if (part.startsWith("border-")) {
-      const color = part.replace("border-", "");
-      if (color === "stone-800") styles.borderColor = "#292524";
-      else if (color === "stone-200") styles.borderColor = "#e7e5e4";
-      else if (color === "emerald-700") styles.borderColor = "#047857";
-      else if (color === "emerald-100") styles.borderColor = "#d1fae5";
-      else if (color === "red-100") styles.borderColor = "#fee2e2";
-      else if (color === "stone-100") styles.borderColor = "#f5f5f4";
-      else if (color === "indigo-100") styles.borderColor = "#e0e7ff";
-      else if (color === "blue-100") styles.borderColor = "#dbeafe";
-      else if (color === "teal-100") styles.borderColor = "#ccfbf1";
-      else if (color === "border/60") styles.borderColor = "rgba(229,231,235,0.6)"; // Assuming border is stone-200
-      else if (color === "border/50") styles.borderColor = "rgba(229,231,235,0.5)";
-      else if (color === "dashed") styles.borderStyle = "dashed";
-      else if (color === "amber-100") styles.borderColor = "#fde68a";
-      else if (color === "amber-700") styles.borderColor = "#b45309";
-      else if (color === "indigo-700") styles.borderColor = "#4338ca";
-      else if (color === "teal-700") styles.borderColor = "#0f766e";
-      else if (color === "blue-700") styles.borderColor = "#1d4ed8";
-      else if (color === "rose-800") styles.borderColor = "#9f1239";
-      else if (color === "amber-200") styles.borderColor = "#fde68a";
-      else if (color === "indigo-200") styles.borderColor = "#c7d2fe";
-      else if (color === "emerald-200") styles.borderColor = "#a7f3d0";
-      else if (color === "teal-200") styles.borderColor = "#99f6e4";
-      else if (color === "blue-200") styles.borderColor = "#bfdbfe";
-      else if (color === "red-200") styles.borderColor = "#fecaca";
-      else if (color === "rose-200") styles.borderColor = "#fbcfe8";
-      else if (color === "stone-300") styles.borderColor = "#d6d3d1";
-    } else if (part.startsWith("px-")) {
-      styles.paddingHorizontal = parseInt(part.replace("px-", "")) * 4;
-    } else if (part.startsWith("py-")) {
-      styles.paddingVertical = parseInt(part.replace("py-", "")) * 4;
-    } else if (part.startsWith("p-")) {
-      styles.padding = parseInt(part.replace("p-", "")) * 4;
-    } else if (part.startsWith("pt-")) {
-      styles.paddingTop = parseInt(part.replace("pt-", "")) * 4;
-    } else if (part.startsWith("pb-")) {
-      styles.paddingBottom = parseInt(part.replace("pb-", "")) * 4;
-    } else if (part.startsWith("pl-")) {
-      styles.paddingLeft = parseInt(part.replace("pl-", "")) * 4;
-    } else if (part.startsWith("pr-")) {
-      styles.paddingRight = parseInt(part.replace("pr-", "")) * 4;
-    } else if (part.startsWith("m-")) {
-      styles.margin = parseInt(part.replace("m-", "")) * 4;
-    } else if (part.startsWith("mt-")) {
-      styles.marginTop = parseInt(part.replace("mt-", "")) * 4;
-    } else if (part.startsWith("mb-")) {
-      styles.marginBottom = parseInt(part.replace("mb-", "")) * 4;
-    } else if (part.startsWith("ml-")) {
-      styles.marginLeft = parseInt(part.replace("ml-", "")) * 4;
-    } else if (part.startsWith("mr-")) {
-      styles.marginRight = parseInt(part.replace("mr-", "")) * 4;
-    } else if (part.startsWith("gap-")) {
-      styles.gap = parseInt(part.replace("gap-", "")) * 4;
-    } else if (part.startsWith("w-")) {
-      styles.width = parseInt(part.replace("w-", "")) * 4;
-    } else if (part.startsWith("h-")) {
-      styles.height = parseInt(part.replace("h-", "")) * 4;
-    } else if (part.startsWith("min-w-")) {
-      styles.minWidth = parseInt(part.replace("min-w-", "")) * 4;
-    } else if (part.startsWith("rounded-")) {
-      if (part === "rounded-full") styles.borderRadius = 9999;
-      else if (part === "rounded-xl") styles.borderRadius = 12;
-      else if (part === "rounded-2xl") styles.borderRadius = 16;
-      else if (part === "rounded-lg") styles.borderRadius = 8;
-    } else if (part === "flex") styles.display = "flex";
-    else if (part === "flex-col") styles.flexDirection = "column";
-    else if (part === "flex-row") styles.flexDirection = "row";
-    else if (part === "items-center") styles.alignItems = "center";
-    else if (part === "justify-center") styles.justifyContent = "center";
-    else if (part === "justify-between") styles.justifyContent = "space-between";
-    else if (part === "flex-wrap") styles.flexWrap = "wrap";
-    else if (part === "flex-1") styles.flex = 1;
-    else if (part === "shrink-0") styles.flexShrink = 0;
-    else if (part === "min-h-screen") styles.minHeight = "100%";
-    else if (part === "text-sm") styles.fontSize = 14;
-    else if (part === "text-xs") styles.fontSize = 12;
-    else if (part === "text-[10px]") styles.fontSize = 10;
-    else if (part === "text-lg") styles.fontSize = 18;
-    else if (part === "text-xl") styles.fontSize = 20;
-    else if (part === "text-2xl") styles.fontSize = 24;
-    else if (part === "text-4xl") styles.fontSize = 36;
-    else if (part === "font-bold") styles.fontWeight = "700";
-    else if (part === "font-black") styles.fontWeight = "900";
-    else if (part === "font-semibold") styles.fontWeight = "600";
-    else if (part === "font-medium") styles.fontWeight = "500";
-    else if (part === "uppercase") styles.textTransform = "uppercase";
-    else if (part === "tracking-tight") styles.letterSpacing = -0.5;
-    else if (part === "tracking-wider") styles.letterSpacing = 0.5;
-    else if (part === "tracking-widest") styles.letterSpacing = 1;
-    else if (part === "text-left") styles.textAlign = "left";
-    else if (part === "text-right") styles.textAlign = "right";
-    else if (part === "text-center") styles.textAlign = "center";
-    else if (part === "relative") styles.position = "relative";
-    else if (part === "absolute") styles.position = "absolute";
-    else if (part === "top-1/2") styles.top = "50%";
-    else if (part === "-translate-y-1/2") styles.transform = [{ translateY: -50 }];
-    else if (part === "outline-none") styles.outlineWidth = 0;
-    else if (part === "shadow-sm") styles.shadowColor = "#000";
-    else if (part === "shadow-sm") styles.shadowOffset = { width: 0, height: 1 };
-    else if (part === "shadow-sm") styles.shadowOpacity = 0.05;
-    else if (part === "shadow-sm") styles.shadowRadius = 2;
-    else if (part === "elevation-1") styles.elevation = 1; // Android shadow
-    else if (part === "transition-all") styles.transitionProperty = "all";
-    else if (part === "hover:bg-stone-900") styles.hoverBgStone900 = "#1c1917";
-    else if (part === "hover:bg-stone-50") styles.hoverBgStone50 = "#fafaf9";
-    else if (part === "hover:border-stone-400") styles.hoverBorderStone400 = "#a8a29e";
-    else if (part === "hover:text-red-600") styles.hoverTextRed600 = "#dc2626";
-    else if (part === "hover:bg-stone-100") styles.hoverBgStone100 = "#f5f5f4";
-    else if (part === "hover:text-stone-700") styles.hoverTextStone700 = "#44403c";
-    else if (part === "hover:bg-red-50") styles.hoverBgRed50 = "#fef2f2";
-    else if (part === "hover:bg-red-100") styles.hoverBgRed100 = "#fee2e2";
-    else if (part === "hover:bg-stone-200") styles.hoverBgStone200 = "#e7e5e4";
-    else if (part === "hover:border-stone-300") styles.hoverBorderStone300 = "#d6d3d1";
-    else if (part === "hover:bg-red-50") styles.hoverBgRed50 = "#fef2f2";
-    else if (part === "hover:border-red-200") styles.hoverBorderRed200 = "#fecaca";
-    else if (part === "hover:text-red-700") styles.hoverTextRed700 = "#b91c1c";
-    else if (part === "disabled:opacity-50") styles.disabledOpacity50 = 0.5;
-    else if (part === "opacity-80") styles.opacity = 0.8;
-    else if (part === "opacity-50") styles.opacity = 0.5;
-    else if (part === "overflow-hidden") styles.overflow = "hidden";
-    else if (part === "overflow-x-auto") styles.overflowX = "scroll";
-    else if (part === "overflow-y-auto") styles.overflowY = "scroll";
-    else if (part === "divide-y") styles.borderBottomWidth = 1;
-    else if (part === "divide-border/50") styles.borderBottomColor = "rgba(229,231,235,0.5)";
-    else if (part === "whitespace-nowrap") styles.whiteSpace = "nowrap";
-    else if (part === "truncate") styles.overflow = "hidden";
-    else if (part === "truncate") styles.whiteSpace = "nowrap";
-    else if (part === "truncate") styles.textOverflow = "ellipsis";
-    else if (part === "underline") styles.textDecorationLine = "underline";
-    else if (part === "underline-offset-2") styles.textUnderlineOffset = 2;
-    else if (part === "border") styles.borderWidth = 1;
-    else if (part === "inset-0") styles.position = "absolute";
-    else if (part === "inset-0") styles.top = 0;
-    else if (part === "inset-0") styles.bottom = 0;
-    else if (part === "inset-0") styles.left = 0;
-    else if (part === "inset-0") styles.right = 0;
-    else if (part === "z-50") styles.zIndex = 50;
-    else if (part === "max-w-7xl") styles.maxWidth = 1280;
-    else if (part === "mx-auto") styles.marginHorizontal = "auto";
-    else if (part === "sm:px-6") styles.paddingHorizontalSm = 24;
-    else if (part === "lg:px-8") styles.paddingHorizontalLg = 32;
-    else if (part === "sm:flex-row") styles.flexDirectionSm = "row";
-    else if (part === "sm:items-center") styles.alignItemsSm = "center";
-    else if (part === "sm:justify-between") styles.justifyContentSm = "space-between";
-    else if (part === "sm:w-72") styles.widthSm = 288;
-    else if (part === "ring-2") styles.borderWidth = 2;
-    else if (part === "ring-offset-1") styles.borderOffset = 4; // Not directly translatable, adjust as needed
-    else if (part === "ring-stone-400") styles.borderColor = "#a8a29e"; // Simulate ring color
-    else if (part === "max-h-[70vh]") styles.maxHeight = "70%";
-  });
+  return {
+    startDate: start ? formatISO(start) : undefined,
+    endDate: end ? formatISO(end) : undefined,
+  };
+}
 
-  return styles;
-};
-
-const cn = (...args: (string | undefined | null | false | { [key: string]: boolean })[]) => {
-  const classNames = args.filter(Boolean).map(arg => {
-    if (typeof arg === 'object') {
-      return Object.keys(arg).filter(key => arg[key]).join(' ');
-    }
-    return arg;
-  }).join(" ");
-  return getTailwindStyles(classNames);
-};
-
-const OrderManagement = () => {
+export default function AdminOrdersScreen() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<OrderResponseDTO | null>(null);
-
-  const [filterStatus, setFilterStatus] = useState<StatusFilter>("ALL");
-  const [filterTimePeriod, setFilterTimePeriod] = useState<TimePeriod | "ALL">("ALL");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
-  const [filterUserId, setFilterUserId] = useState<string>("ALL");
-  const [filterOrderId, setFilterOrderId] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-
+  const [periodFilter, setPeriodFilter] = useState<TimePeriod | "ALL" | "CUSTOM">("ALL");
+  const [customStart, setCustomStart] = useState(getTodayStr());
+  const [customEnd, setCustomEnd] = useState(getTodayStr());
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "ALL">("ALL");
+  const [userIdFilter, setUserIdFilter] = useState<number | "ALL">("ALL");
+  const [orderIdSearch, setOrderIdSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [size] = useState(10);
-  const [sort] = useState("orderDate,desc");
 
-  const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderResponseDTO | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
-  const { data: users, isLoading: isLoadingUsers } = useQuery<UserResponseDTO[], Error>({
-    queryKey: ["users"],
-    queryFn: async () => (await usersApi.getAll()).data,
-    staleTime: 5 * 60 * 1000,
-  });
+  const isCustom = periodFilter === "CUSTOM";
+  const customPeriodStartDate = isCustom && customStart ? customStart : undefined;
+  const customPeriodEndDate = isCustom && customEnd ? customEnd : undefined;
 
   const filterParams = useMemo(() => {
-    const params: Record<string, unknown> = { page, size, sort };
+    const params: any = { page, size: 20, sort: "orderDate,desc" };
+    if (statusFilter !== "ALL") params.status = statusFilter;
+    if (userIdFilter !== "ALL") params.userId = userIdFilter;
 
-    if (filterStatus !== "ALL") params.status = filterStatus;
-    if (filterUserId !== "ALL" && !isNaN(parseInt(filterUserId)))
-      params.userId = parseInt(filterUserId);
-    if (filterOrderId) params.orderId = parseInt(filterOrderId);
-    if (filterTimePeriod !== "ALL") {
-      params.period = filterTimePeriod;
-      if (filterTimePeriod === TimePeriod.CUSTOM) {
-        if (customStartDate) params.startDate = customStartDate;
-        if (customEndDate) params.endDate = customEndDate;
-      }
+    let currentStartDate = customPeriodStartDate;
+    let currentEndDate = customPeriodEndDate;
+
+    if (periodFilter !== "ALL" && periodFilter !== "CUSTOM") {
+      const { startDate, endDate } = calculateDateRange(periodFilter as TimePeriod);
+      currentStartDate = startDate;
+      currentEndDate = endDate;
     }
 
-    return params;
-  }, [filterStatus, filterTimePeriod, customStartDate, customEndDate, filterUserId, filterOrderId, page, size, sort]);
+    if (currentStartDate) params.startDate = currentStartDate;
+    if (currentEndDate) params.endDate = currentEndDate;
 
-  const {
-    data: ordersPage,
-    isLoading: isLoadingOrders,
-    error: ordersError,
-  } = useQuery<PageableResponse<OrderResponseDTO>, Error>({
-    queryKey: ["orders", filterParams],
+    return params;
+  }, [statusFilter, periodFilter, customPeriodStartDate, customPeriodEndDate, userIdFilter, page]);
+
+  const { data: ordersPage, isLoading } = useQuery<PageableResponse<OrderResponseDTO>>({
+    queryKey: ["admin-orders", filterParams],
     queryFn: async () => (await ordersApi.filter(filterParams)).data,
-    placeholderData: (prev) => prev,
   });
 
-  const orders = ordersPage?.content ?? [];
-  const totalPages = ordersPage?.totalPages ?? 0;
-  const totalElements = ordersPage?.totalElements ?? 0;
+  const { data: users } = useQuery<UserResponseDTO[]>({
+    queryKey: ["users-list"],
+    queryFn: async () => (await usersApi.getAll()).data,
+  });
+
+  const { data: metrics } = useQuery({
+    queryKey: ["orders-metrics", periodFilter, customPeriodStartDate, customPeriodEndDate],
+    queryFn: async () => {
+      let start = customPeriodStartDate;
+      let end = customPeriodEndDate;
+
+      if (periodFilter !== "ALL" && periodFilter !== "CUSTOM") {
+        const { startDate, endDate } = calculateDateRange(periodFilter as TimePeriod);
+        start = startDate;
+        end = endDate;
+      }
+      return (await financialReportsApi.getFinancialSummary(periodFilter as TimePeriod, start, end)).data;
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: OrderStatus }) => ordersApi.updateOrderStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders-metrics"] });
+      setIsEditModalOpen(false);
+    },
+  });
 
   const filteredOrders = useMemo(() => {
-    if (!searchTerm.trim()) return orders;
-    const term = searchTerm.toLowerCase();
-    return orders.filter(
-      (o) =>
-        o.userEmail?.toLowerCase().includes(term) ||
-        o.id?.toString().includes(term)
-    );
-  }, [orders, searchTerm]);
+    let list = ordersPage?.content || [];
+    if (orderIdSearch.trim()) {
+      list = list.filter(o => o.id.toString().includes(orderIdSearch.trim()));
+    }
+    return list;
+  }, [ordersPage, orderIdSearch]);
 
-  const countByStatus = (status: OrderStatus) =>
-    orders.filter((o) => o.orderStatus === status).length;
-
-  const hasActiveFilters =
-    filterStatus !== "ALL" ||
-    filterTimePeriod !== "ALL" ||
-    filterUserId !== "ALL" ||
-    !!filterOrderId ||
-    !!searchTerm;
-
-  const clearAllFilters = () => {
-    setFilterStatus("ALL");
-    setFilterTimePeriod("ALL");
-    setCustomStartDate("");
-    setCustomEndDate("");
-    setFilterUserId("ALL");
-    setFilterOrderId("");
-    setSearchTerm("");
+  const clearFilters = () => {
+    setPeriodFilter("ALL");
+    setStatusFilter("ALL");
+    setUserIdFilter("ALL");
+    setOrderIdSearch("");
+    setCustomStart(getTodayStr()); // Reset custom dates to today
+    setCustomEnd(getTodayStr());   // Reset custom dates to today
     setPage(0);
   };
 
-  const openDetailsModal = (order: OrderResponseDTO) => {
+  const handleUpdateStatus = (status: OrderStatus) => {
+    if (selectedOrder) {
+      updateStatusMutation.mutate({ id: selectedOrder.id, status });
+    }
+  };
+
+  const openView = (order: OrderResponseDTO) => {
     setSelectedOrder(order);
-    setIsDetailsModalOpen(true);
+    setIsViewModalOpen(true);
   };
 
-  const closeDetailsModal = () => {
-    setIsDetailsModalOpen(false);
-    setSelectedOrder(null);
+  const openEdit = (order: OrderResponseDTO) => {
+    setSelectedOrder(order);
+    setIsEditModalOpen(true);
   };
 
-  const updateOrderStatusMutation = useMutation({
-    mutationFn: (data: { orderId: number; newStatus: OrderStatus }) =>
-      ordersApi.updateOrderStatus(data.orderId, data.newStatus),
-    onSuccess: () => {
-      toast({ title: "Sucesso", description: "Status do pedido atualizado." });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      closeDetailsModal();
-    },
-    onError: () => {
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar status.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  if (isLoadingOrders || isLoadingUsers) {
-    return (
-      <SafeAreaView style={cn("min-h-screen bg-background flex items-center justify-center")}>
-        <View style={cn("flex flex-col items-center gap-3")}>
-          <ActivityIndicator size="large" color="#a8a29e" />
-          <Text style={cn("text-stone-500 text-sm font-medium")}>
-            Carregando pedidos...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (ordersError) {
-    return (
-      <SafeAreaView style={cn("min-h-screen bg-background flex items-center justify-center")}>
-        <View style={cn("text-center space-y-2")}>
-          <AlertCircle size={40} color="#dc2626" style={cn("mx-auto")} />
-          <Text style={cn("text-xl font-serif font-bold text-red-700")}>
-            Erro ao carregar pedidos
-          </Text>
-          <Text style={cn("text-stone-500 text-sm")}>Tente novamente mais tarde.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const metricsData = [
+    { key: 'pending', label: "Pendentes", value: metrics?.pendingOrders || 0, icon: Clock, color: "#b45309", bg: "#fefce8", border: "#fef08a" },
+    { key: 'processing', label: "Processando", value: metrics?.processingOrders || 0, icon: RefreshCw, color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+    { key: 'completed', label: "Concluídos", value: metrics?.completedOrders || 0, icon: CheckCircle2, color: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
+    { key: 'canceled', label: "Cancelados", value: metrics?.canceledOrders || 0, icon: XCircle, color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+  ];
 
   return (
-    <SafeAreaView style={cn("min-h-screen bg-background")}>
-      <ScrollView contentContainerStyle={cn("pt-6 pb-6")} style={cn("flex-1")}>
-        <View style={cn("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8")}>
-          <Animated.View
-            entering={FadeIn.duration(400).delay(0)}
-            style={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4")}
-          >
-            <View>
-              <Text style={cn("font-serif text-4xl font-bold text-foreground tracking-tight")}>
-                Gestão de Pedidos
-              </Text>
-              <Text style={cn("text-stone-500 text-sm mt-1")}>
-                {totalElements > 0
-                  ? `${totalElements} pedidos encontrados`
-                  : "Nenhum pedido no período"}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => Alert.alert("Relatório de Vendas", "Funcionalidade de relatório de vendas.")}
-              style={cn("inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-background px-5 py-2.5 text-sm font-semibold text-stone-700", { hoverBgStone50: true })}
+    <View style={styles.container}>
+      <Animated.ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} entering={FadeIn.duration(600)}>
+
+        <Animated.View style={styles.header} entering={FadeInDown.duration(600)}>
+          <Text style={styles.title}>Gestão de Pedidos</Text>
+          <Text style={styles.subtitle}>{ordersPage?.totalElements || 0} pedidos encontrados</Text>
+        </Animated.View>
+
+        <View style={styles.metricsGrid}>
+          {metricsData.map((m, i) => (
+            <MotiView
+              key={m.key}
+              from={{ opacity: 0, translateY: 15 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 500, delay: i * 100 }}
+              style={{ width: (width - 44) / 2 }}
             >
-              <FileText size={16} color="#44403c" />
-              <Text style={cn("text-stone-700 text-sm font-semibold")}>Relatório de Vendas</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeIn.duration(400).delay(50)}
-            style={cn("grid grid-cols-2 lg:grid-cols-4 gap-3")}
-          >
-            {METRIC_CONFIG.map((m) => (
-              <TouchableOpacity
-                key={m.status}
-                onPress={() =>
-                  setFilterStatus(
-                    filterStatus === m.status ? "ALL" : m.status
-                  )
-                }
-                style={cn(
-                  "rounded-2xl border p-4 flex flex-col gap-2 text-left transition-all",
-                  m.bgClass,
-                  filterStatus === m.status && "border-2 border-stone-400" // Simulate ring
-                )}
-                activeOpacity={0.7}
-              >
-                <View style={cn("w-8 h-8 rounded-xl flex items-center justify-center", m.iconBg)}>
-                  <Text style={cn(m.colorClass)}>{m.icon}</Text>
+              <Surface style={[styles.metricCard, { backgroundColor: m.bg, borderColor: m.border, width: '100%' }]} elevation={0}>
+                <View style={styles.metricHeader}>
+                  <m.icon size={16} color={m.color} />
+                  <Text style={[styles.metricLabel, { color: m.color }]}>{m.label}</Text>
                 </View>
-                <View>
-                  <Text style={cn("text-2xl font-black", m.colorClass)}>
-                    {countByStatus(m.status)}
-                  </Text>
-                  <Text style={cn("text-xs font-semibold mt-0.5 opacity-80", m.colorClass)}>
-                    {m.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </Animated.View>
+                <Text style={[styles.metricValue, { color: m.color }]}>{m.value}</Text>
+              </Surface>
+            </MotiView>
+          ))}
+        </View>
 
-          <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
-            style={cn("bg-card rounded-2xl border border-border/60 p-5 sm:p-6 space-y-4 shadow-sm")}
-          >
-            <View style={cn("flex items-center gap-2")}>
-              <View style={cn("bg-stone-100 p-1.5 rounded-lg")}>
-                <Calendar size={16} color="#57534e" />
-              </View>
-              <Text style={cn("text-xs font-black uppercase tracking-widest text-stone-500")}>
-                Período
-              </Text>
-            </View>
-
-            <View style={cn("flex flex-wrap gap-2")}>
-              {TIME_PERIOD_CONFIG.map((p) => (
+        <MotiView
+          from={{ opacity: 0, translateY: 15 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 500, delay: 400 }}
+        >
+          <Surface style={styles.filterSection} elevation={0}>
+            <Text style={styles.filterTitle}><Calendar size={14} color="#78716c" /> PERÍODO</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+              {PERIODS.map(p => (
                 <TouchableOpacity
                   key={p.value}
-                  onPress={() => {
-                    setFilterTimePeriod(p.value);
-                    setPage(0);
-                  }}
-                  style={cn(
-                    "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border",
-                    filterTimePeriod === p.value
-                      ? "bg-stone-800 text-amber-50 border-stone-800 shadow-sm"
-                      : "bg-background border-stone-200 text-stone-600",
-                    filterTimePeriod === p.value ? {} : { hoverBgStone50: true, hoverBorderStone300: true }
-                  )}
+                  style={[styles.chip, periodFilter === p.value && styles.chipActive]}
+                  onPress={() => { setPeriodFilter(p.value as any); setPage(0); }}
                 >
-                  <Text style={cn(filterTimePeriod === p.value ? "text-amber-50" : "text-stone-600", "text-xs font-bold")}>
-                    {p.label}
+                  <Text style={[styles.chipText, periodFilter === p.value && styles.chipTextActive]}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {isCustom && (
+              <View style={styles.customDateRow}>
+                <TextInput mode="outlined" label="Início (YYYY-MM-DD)" value={customStart} onChangeText={setCustomStart} style={styles.dateInput} activeOutlineColor="#292524" />
+                <TextInput mode="outlined" label="Fim (YYYY-MM-DD)" value={customEnd} onChangeText={setCustomEnd} style={styles.dateInput} activeOutlineColor="#292524" />
+              </View>
+            )}
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.filterTitle}><Filter size={14} color="#78716c" /> STATUS DO PEDIDO</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+              <TouchableOpacity
+                style={[styles.chip, statusFilter === "ALL" && styles.chipActive]}
+                onPress={() => { setStatusFilter("ALL"); setPage(0); }}
+              >
+                <Text style={[styles.chipText, statusFilter === "ALL" && styles.chipTextActive]}>Todos</Text>
+              </TouchableOpacity>
+              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.chip, statusFilter === key && styles.chipActive]}
+                  onPress={() => { setStatusFilter(key as OrderStatus); setPage(0); }}
+                >
+                  <config.icon size={14} color={statusFilter === key ? "#ffffff" : config.text} />
+                  <Text style={[styles.chipText, statusFilter === key && styles.chipTextActive]}>{config.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.searchRow}>
+              <View style={styles.searchCol}>
+                <Text style={styles.filterTitle}><User size={14} color="#78716c" /> FILTRAR POR USUÁRIO</Text>
+                <TouchableOpacity style={styles.dropdownBtn} onPress={() => setIsUserModalOpen(true)}>
+                  <Text style={styles.dropdownBtnText} numberOfLines={1}>
+                    {userIdFilter === "ALL" ? "Todos os usuários" : users?.find(u => u.id === userIdFilter)?.name || "Selecionado"}
                   </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.searchCol}>
+                <Text style={styles.filterTitle}><Search size={14} color="#78716c" /> BUSCAR POR ID</Text>
+                <TextInput
+                  mode="outlined"
+                  placeholder="Ex: 1042"
+                  value={orderIdSearch}
+                  onChangeText={setOrderIdSearch}
+                  style={styles.searchInput}
+                  activeOutlineColor="#292524"
+                  outlineStyle={{ borderRadius: 12 }}
+                />
+              </View>
+            </View>
+
+            {(statusFilter !== "ALL" || periodFilter !== "ALL" || userIdFilter !== "ALL" || orderIdSearch !== "") && (
+              <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
+                <Text style={styles.clearBtnText}>Limpar Filtros</Text>
+              </TouchableOpacity>
+            )}
+          </Surface>
+        </MotiView>
+
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#292524" style={styles.loader} />
+        ) : filteredOrders.length === 0 ? (
+          <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <View style={styles.emptyState}>
+              <Package size={48} color="#d6d3d1" />
+              <Text style={styles.emptyTitle}>Nenhum pedido encontrado</Text>
+              <Text style={styles.emptySubtitle}>Tente ajustar os filtros acima.</Text>
+            </View>
+          </MotiView>
+        ) : (
+          <View style={styles.listContainer}>
+            {filteredOrders.map((order, index) => {
+              const statusConf = STATUS_CONFIG[order.orderStatus];
+              return (
+                <MotiView
+                  key={order.id}
+                  from={{ opacity: 0, translateY: 10 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 400, delay: 300 + (index * 60) }}
+                >
+                  <Surface style={styles.orderCard} elevation={0}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.idRow}>
+                        <Text style={styles.orderId}>#{order.id}</Text>
+                        <View style={styles.paymentBadge}>
+                          <CreditCard size={12} color="#44403c" />
+                          <Text style={styles.paymentText}>{order.paymentMethod.replace('_', ' ')}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: statusConf.bg }]}>
+                        <Text style={[styles.statusText, { color: statusConf.text }]}>{statusConf.label}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardBody}>
+                      <Text style={styles.clientName} numberOfLines={1}>{order.userEmail}</Text>
+                      <Text style={styles.orderDate}>{format(new Date(order.orderDate), "dd/MM/yyyy 'às' HH:mm")}</Text>
+
+                      <View style={styles.detailsGrid}>
+                        <View style={styles.detailBox}>
+                          <Text style={styles.detailLabel}>TOTAL DO PEDIDO</Text>
+                          <Text style={styles.detailValue}>{formatCurrency(order.totalPrice)}</Text>
+                        </View>
+                        <View style={styles.detailBox}>
+                          <Text style={styles.detailLabel}>QUANTIDADE</Text>
+                          <Text style={styles.detailValue}>{order.items.length} {order.items.length === 1 ? 'item' : 'itens'}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardFooter}>
+                      <View style={[styles.statusBadge, { backgroundColor: statusConf.bg }]}>
+                        <Text style={[styles.statusText, { color: statusConf.text }]}>{statusConf.label}</Text>
+                      </View>
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity style={styles.iconBtn} onPress={() => openView(order)}>
+                          <Eye size={20} color="#44403c" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(order)}>
+                          <Edit size={20} color="#2563eb" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </Surface>
+                </MotiView>
+              );
+            })}
+          </View>
+        )}
+
+        {ordersPage && ordersPage.totalPages > 1 && (
+          <View style={styles.pagination}>
+            <Button disabled={page === 0} onPress={() => setPage(p => p - 1)}>Anterior</Button>
+            <Text style={styles.pageText}>{page + 1} de {ordersPage.totalPages}</Text>
+            <Button disabled={page >= ordersPage.totalPages - 1} onPress={() => setPage(p => p + 1)}>Próxima</Button>
+          </View>
+        )}
+      </Animated.ScrollView>
+
+      <Portal>
+        <Modal visible={isViewModalOpen} onDismiss={() => setIsViewModalOpen(false)} contentContainerStyle={styles.modalWrapper}>
+          {selectedOrder && (
+            <MotiView
+              from={{ opacity: 0, scale: 0.95, translateY: 20 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              exit={{ opacity: 0, scale: 0.95, translateY: 20 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+              style={styles.modalContainer}
+            >
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Pedido #{selectedOrder.id}</Text>
+                  <TouchableOpacity onPress={() => setIsViewModalOpen(false)}><X size={24} color="#44403c" /></TouchableOpacity>
+                </View>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalLabel}>Cliente</Text>
+                  <Text style={styles.modalValue}>{selectedOrder.userEmail}</Text>
+
+                  <Text style={styles.modalLabel}>Data</Text>
+                  <Text style={styles.modalValue}>{format(new Date(selectedOrder.orderDate), "dd/MM/yyyy HH:mm")}</Text>
+
+                  <Text style={styles.modalLabel}>Pagamento</Text>
+                  <Text style={styles.modalValue}>{selectedOrder.paymentMethod} - {selectedOrder.payment.paymentStatus}</Text>
+
+                  <Divider style={{ marginVertical: 16 }} />
+                  <Text style={[styles.modalLabel, { marginBottom: 8 }]}>Itens do Pedido</Text>
+                  {selectedOrder.items.map(item => (
+                    <View key={item.id} style={styles.itemRow}>
+                      <Text style={styles.itemName}>{item.quantity}x {item.productName}</Text>
+                      <Text style={styles.itemPrice}>{formatCurrency(item.subtotal)}</Text>
+                    </View>
+                  ))}
+                  <Divider style={{ marginVertical: 16 }} />
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>{formatCurrency(selectedOrder.totalPrice)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </MotiView>
+          )}
+        </Modal>
+
+        <Modal visible={isEditModalOpen} onDismiss={() => setIsEditModalOpen(false)} contentContainerStyle={styles.modalWrapper}>
+          <MotiView
+            from={{ opacity: 0, scale: 0.95, translateY: 20 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            exit={{ opacity: 0, scale: 0.95, translateY: 20 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+            style={styles.modalContainer}
+          >
+            <Text style={styles.modalTitle}>Atualizar Status</Text>
+            <Text style={styles.modalSubtitle}>Pedido #{selectedOrder?.id}</Text>
+            <View style={styles.statusOptions}>
+              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.statusOptionBtn, selectedOrder?.orderStatus === key && { borderColor: config.text, backgroundColor: config.bg }]}
+                  onPress={() => handleUpdateStatus(key as OrderStatus)}
+                  disabled={updateStatusMutation.isPending}
+                >
+                  <config.icon size={20} color={config.text} />
+                  <Text style={[styles.statusOptionText, { color: config.text }]}>{config.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            <Button mode="text" textColor="#78716c" onPress={() => setIsEditModalOpen(false)} style={{ marginTop: 16 }}>Cancelar</Button>
+          </MotiView>
+        </Modal>
 
-            {filterTimePeriod === TimePeriod.CUSTOM && (
-              <Animated.View
-                entering={SlideInDown.duration(200)}
-                exiting={SlideOutDown.duration(200)}
-                style={cn("grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1")}
-              >
-                <View style={cn("space-y-1.5")}>
-                  <Text style={cn("text-xs font-bold uppercase text-stone-500")}>
-                    Data inicial
-                  </Text>
-                  <TextInput
-                    value={customStartDate}
-                    onChangeText={(text) => setCustomStartDate(text)}
-                    placeholder="YYYY-MM-DD"
-                    style={cn("rounded-xl border-stone-200 bg-background focus:ring-stone-300 px-3 py-2 text-foreground")}
-                    keyboardType="number-pad"
-                  />
-                </View>
-                <View style={cn("space-y-1.5")}>
-                  <Text style={cn("text-xs font-bold uppercase text-stone-500")}>
-                    Data final
-                  </Text>
-                  <TextInput
-                    value={customEndDate}
-                    onChangeText={(text) => setCustomEndDate(text)}
-                    placeholder="YYYY-MM-DD"
-                    style={cn("rounded-xl border-stone-200 bg-background focus:ring-stone-300 px-3 py-2 text-foreground")}
-                    keyboardType="number-pad"
-                  />
-                </View>
-              </Animated.View>
-            )}
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeIn.duration(400).delay(150)}
-            style={cn("space-y-4")}
+        <Modal visible={isUserModalOpen} onDismiss={() => setIsUserModalOpen(false)} contentContainerStyle={styles.modalWrapper}>
+          <MotiView
+            from={{ opacity: 0, scale: 0.95, translateY: 20 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            exit={{ opacity: 0, scale: 0.95, translateY: 20 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+            style={styles.modalContainer}
           >
-            <View style={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between")}>
-              <View style={cn("space-y-2")}>
-                <Text style={cn("text-xs font-black uppercase tracking-widest text-stone-500")}>
-                  Status do Pedido
-                </Text>
-                <View style={cn("flex flex-wrap gap-2")}>
-                  {STATUS_FILTER_CONFIG.map((f) => {
-                    const isActive = filterStatus === f.value;
-                    const count =
-                      f.value === "ALL"
-                        ? orders.length
-                        : countByStatus(f.value as OrderStatus);
-                    return (
-                      <TouchableOpacity
-                        key={f.value}
-                        onPress={() => {
-                          setFilterStatus(f.value);
-                          setPage(0);
-                        }}
-                        style={cn(
-                          "flex flex-row items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold border transition-all",
-                          isActive
-                            ? f.activeClass + " shadow-sm"
-                            : "bg-background border-stone-200 text-stone-600",
-                          isActive ? {} : { hoverBorderStone400: true, hoverBgStone50: true }
-                        )}
-                      >
-                        {React.cloneElement(f.icon as React.ReactElement, {
-                          color: isActive ? "#fffbeb" : "#a8a29e",
-                        })}
-                        <Text style={cn(isActive ? "text-amber-50" : "text-stone-600", "text-sm font-semibold")}>
-                          {f.label}
-                        </Text>
-                        <Text
-                          style={cn(
-                            "rounded-full px-1.5 py-0.5 text-[10px] font-black",
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : f.badgeClass
-                          )}
-                        >
-                          {count}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View style={cn("relative shrink-0")}>
-                <Search size={16} color="#a8a29e" style={cn("absolute left-3 top-1/2 -translate-y-1/2")} />
-                <TextInput
-                  placeholder="Buscar por e-mail ou ID..."
-                  value={searchTerm}
-                  onChangeText={(text) => setSearchTerm(text)}
-                  style={cn("w-full sm:w-72 pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 bg-background text-sm text-foreground outline-none", { placeholderTextColor: "#a8a29e" })}
-                />
-              </View>
-            </View>
-
-            <View style={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3")}>
-              <View style={cn("space-y-1.5")}>
-                <Text style={cn("text-xs font-bold uppercase text-stone-500 flex flex-row items-center gap-1")}>
-                  <Users size={12} color="#78716c" /> Filtrar por Usuário
-                </Text>
-                {/* Para Select, você precisaria de um componente de picker customizado ou de uma biblioteca */}
-                <TouchableOpacity
-                  onPress={() => Alert.alert("Seleção de Usuário", "Implementar um Picker para usuários.")}
-                  style={cn("rounded-xl border-stone-200 bg-background px-3 py-2 flex flex-row items-center justify-between")}
-                >
-                  <Text style={cn("text-foreground")}>
-                    {filterUserId === "ALL" ? "Todos os usuários" : users?.find(u => String(u.id) === filterUserId)?.name ?? "Usuário"}
-                  </Text>
-                  <ChevronDown size={16} color="#a8a29e" />
+            <Text style={styles.modalTitle}>Selecionar Usuário</Text>
+            <ScrollView style={{ maxHeight: 400, marginTop: 16 }}>
+              <TouchableOpacity style={styles.userItem} onPress={() => { setUserIdFilter("ALL"); setIsUserModalOpen(false); setPage(0); }}>
+                <Text style={styles.userItemText}>Todos os usuários</Text>
+              </TouchableOpacity>
+              {users?.map(u => (
+                <TouchableOpacity key={u.id} style={styles.userItem} onPress={() => { setUserIdFilter(u.id); setIsUserModalOpen(false); setPage(0); }}>
+                  <Text style={styles.userItemText}>{u.name} ({u.email})</Text>
                 </TouchableOpacity>
-              </View>
-
-              <View style={cn("space-y-1.5")}>
-                <Text style={cn("text-xs font-bold uppercase text-stone-500 flex flex-row items-center gap-1")}>
-                  <TrendingUp size={12} color="#78716c" /> Buscar por ID do Pedido
-                </Text>
-                <TextInput
-                  value={filterOrderId}
-                  onChangeText={(text) => { setFilterOrderId(text); setPage(0); }}
-                  placeholder="Ex: 1042"
-                  style={cn("rounded-xl border-stone-200 bg-background focus:ring-stone-300 px-3 py-2 text-foreground")}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              {hasActiveFilters && (
-                <View style={cn("flex items-end")}>
-                  <TouchableOpacity
-                    onPress={clearAllFilters}
-                    style={cn("w-full flex flex-row items-center justify-center gap-2 rounded-xl border border-stone-200 bg-background px-4 py-2.5 text-sm font-semibold text-stone-600", { hoverBgRed50: true, hoverBorderRed200: true, hoverTextRed700: true })}
-                  >
-                    <X size={16} color="#57534e" />
-                    <Text style={cn("text-stone-600 text-sm font-semibold")}>Limpar Filtros</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {hasActiveFilters && (
-              <Animated.View
-                entering={FadeIn.duration(200).delay(0)}
-                exiting={FadeOut.duration(200)}
-                style={cn("flex flex-wrap items-center gap-2")}
-              >
-                <Text style={cn("text-xs text-stone-500 font-medium")}>
-                  Mostrando{" "}
-                  <Text style={cn("font-black text-foreground")}>
-                    {filteredOrders.length}
-                  </Text>{" "}
-                  {filteredOrders.length === 1 ? "pedido" : "pedidos"}
-                </Text>
-
-                {filterStatus !== "ALL" && (
-                  <View style={cn("inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-700 px-3 py-1 text-xs font-bold")}>
-                    <Text style={cn("text-stone-700 text-xs font-bold")}>
-                      {STATUS_FILTER_CONFIG.find((f) => f.value === filterStatus)?.label}
-                    </Text>
-                    <TouchableOpacity onPress={() => setFilterStatus("ALL")} style={cn({ hoverTextRed600: true })}>
-                      <X size={12} color="#78716c" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {filterTimePeriod !== "ALL" && (
-                  <View style={cn("inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-700 px-3 py-1 text-xs font-bold")}>
-                    <Text style={cn("text-stone-700 text-xs font-bold")}>
-                      {TIME_PERIOD_CONFIG.find((p) => p.value === filterTimePeriod)?.label}
-                    </Text>
-                    <TouchableOpacity onPress={() => setFilterTimePeriod("ALL")} style={cn({ hoverTextRed600: true })}>
-                      <X size={12} color="#78716c" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {filterUserId !== "ALL" && (
-                  <View style={cn("inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-700 px-3 py-1 text-xs font-bold")}>
-                    <Text style={cn("text-stone-700 text-xs font-bold")}>
-                      {users?.find((u) => String(u.id) === filterUserId)?.name ?? "Usuário"}
-                    </Text>
-                    <TouchableOpacity onPress={() => setFilterUserId("ALL")} style={cn({ hoverTextRed600: true })}>
-                      <X size={12} color="#78716c" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {filterOrderId && (
-                  <View style={cn("inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-700 px-3 py-1 text-xs font-bold")}>
-                    <Text style={cn("text-stone-700 text-xs font-bold")}>
-                      Pedido #{filterOrderId}
-                    </Text>
-                    <TouchableOpacity onPress={() => setFilterOrderId("")} style={cn({ hoverTextRed600: true })}>
-                      <X size={12} color="#78716c" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Animated.View>
-            )}
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeIn.duration(400).delay(200)}
-            style={cn("bg-card rounded-2xl border border-border/60 shadow-sm overflow-hidden")}
-          >
-            {filteredOrders.length > 0 ? (
-              <View style={cn("sm:hidden divide-y divide-border/50")}>
-                {filteredOrders.map((order) => {
-                  const isExpanded = expandedCardId === order.id;
-                  return (
-                    <Animated.View
-                      key={order.id}
-                      layout={Layout.springify()}
-                      entering={FadeIn}
-                      exiting={FadeOut}
-                      style={cn("p-4")}
-                    >
-                      <TouchableOpacity
-                        onPress={() => setExpandedCardId(isExpanded ? null : order.id)}
-                        style={cn("flex flex-row items-start justify-between gap-2")}
-                        activeOpacity={0.7}
-                      >
-                        <View>
-                          <Text style={cn("text-xs font-black text-stone-500")}>
-                            #{order.id}
-                          </Text>
-                          <Text style={cn("font-semibold text-foreground text-sm mt-0.5")}>
-                            {order.userEmail}
-                          </Text>
-                          <Text style={cn("text-xs text-stone-400 mt-0.5")}>
-                            {new Date(order.orderDate).toLocaleString("pt-BR")}
-                          </Text>
-                        </View>
-                        <View style={cn("flex flex-row items-center gap-2")}>
-                          <View
-                            style={cn(
-                              "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold shrink-0",
-                              STATUS_STYLE_MAP[order.orderStatus]
-                            )}
-                          >
-                            <Text style={cn(STATUS_STYLE_MAP[order.orderStatus].split(" ").find(c => c.startsWith("text-")) || "text-foreground", "text-xs font-bold")}>
-                              {order.orderStatus.replace(/_/g, " ")}
-                            </Text>
-                          </View>
-                          <View style={cn("shrink-0 text-stone-400")}>
-                            {isExpanded ? (
-                              <ChevronUp size={16} color="#a8a29e" />
-                            ) : (
-                              <ChevronDown size={16} color="#a8a29e" />
-                            )}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-
-                      {isExpanded ? (
-                        <Animated.View
-                          entering={SlideInDown.duration(200)}
-                          exiting={SlideOutDown.duration(200)}
-                          style={cn("overflow-hidden")}
-                        >
-                          <View style={cn("pt-4 space-y-3")}>
-                            <View style={cn("grid grid-cols-2 gap-2")}>
-                              <View style={cn("rounded-xl bg-stone-50 border border-stone-100 p-3")}>
-                                <Text style={cn("text-[9px] uppercase font-black text-stone-400 mb-1")}>Total</Text>
-                                <Text style={cn("text-sm font-black text-foreground")}>
-                                  {formatCurrency(order.totalPrice)}
-                                </Text>
-                              </View>
-                              <View style={cn("rounded-xl bg-stone-50 border border-stone-100 p-3")}>
-                                <Text style={cn("text-[9px] uppercase font-black text-stone-400 mb-1")}>Pagamento</Text>
-                                <Text style={cn("text-xs font-semibold text-foreground")}>
-                                  {order.paymentMethod === PaymentMethod.PIX
-                                    ? "PIX"
-                                    : order.paymentMethod === PaymentMethod.CREDIT_CARD
-                                    ? "Cartão de Crédito"
-                                    : "Cartão de Débito"}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={cn("flex flex-row gap-2 pt-1")}>
-                              <TouchableOpacity
-                                onPress={() => openDetailsModal(order)}
-                                style={cn("flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-stone-200 bg-background text-stone-700 text-xs font-bold", { hoverBgStone50: true })}
-                              >
-                                <Eye size={14} color="#44403c" />
-                                <Text style={cn("text-stone-700 text-xs font-bold")}>Visualizar</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => openDetailsModal(order)}
-                                style={cn("flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-stone-200 bg-background text-stone-700 text-xs font-bold", { hoverBgStone50: true })}
-                              >
-                                <Edit size={14} color="#44403c" />
-                                <Text style={cn("text-stone-700 text-xs font-bold")}>Editar</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        </Animated.View>
-                      ) : null}
-                    </Animated.View>
-                  );
-                })}
-              </View>
-            ) : (
-              <View style={cn("py-20 text-center")}>
-                <View style={cn("flex flex-col items-center gap-3 text-stone-400")}>
-                  <View style={cn("w-14 h-14 rounded-full bg-stone-100 flex items-center justify-center")}>
-                    <ShoppingBag size={24} color="#a8a29e" style={cn("opacity-50")} />
-                  </View>
-                  <Text style={cn("font-serif text-lg font-semibold text-stone-500")}>
-                    Nenhum pedido encontrado
-                  </Text>
-                  <Text style={cn("text-xs")}>
-                    {hasActiveFilters
-                      ? "Tente remover ou combinar filtros diferentes."
-                      : "Não há pedidos para o período selecionado."}
-                  </Text>
-                  {hasActiveFilters && (
-                    <TouchableOpacity
-                      onPress={clearAllFilters}
-                      style={cn("mt-1 text-xs font-bold text-stone-600 underline underline-offset-2", { hoverTextRed600: true })}
-                    >
-                      <Text style={cn("text-xs font-bold text-stone-600 underline")}>
-                        Limpar todos os filtros
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            )}
-
-            {totalPages > 1 && (
-              <View style={cn("px-6 py-4 border-t border-border/50 flex flex-row items-center justify-between")}>
-                <Text style={cn("text-xs text-stone-500")}>
-                  Página <Text style={cn("font-bold")}>{page + 1}</Text> de{" "}
-                  <Text style={cn("font-bold")}>{totalPages}</Text>
-                </Text>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
-              </View>
-            )}
-          </Animated.View>
-        </View>
-      </ScrollView>
-
-      {selectedOrder && (
-        <OrderDetailsModal
-          isOpen={isDetailsModalOpen}
-          onClose={closeDetailsModal}
-          order={selectedOrder}
-          onUpdateStatus={updateOrderStatusMutation.mutate}
-          isUpdatingStatus={updateOrderStatusMutation.isPending}
-        />
-      )}
-    </SafeAreaView>
+              ))}
+            </ScrollView>
+          </MotiView>
+        </Modal>
+      </Portal>
+    </View>
   );
-};
+}
 
-export default OrderManagement;
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f5f5f4" },
+  scrollContent: { padding: 16, paddingBottom: 40 },
+  header: { marginBottom: 20, marginTop: Platform.OS === "ios" ? 10 : 20 },
+  title: { fontFamily: "serif", fontSize: 32, fontWeight: "bold", color: "#1c1917" },
+  subtitle: { fontSize: 14, color: "#78716c", marginTop: 4 },
+
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
+  metricCard: { borderRadius: 16, padding: 16, borderWidth: 1 },
+  metricHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  metricLabel: { fontSize: 12, fontWeight: "bold", textTransform: "uppercase" },
+  metricValue: { fontFamily: "serif", fontSize: 28, fontWeight: "bold" },
+
+  filterSection: { backgroundColor: "#ffffff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#e7e5e4", marginBottom: 24 },
+  filterTitle: { fontSize: 10, fontWeight: "bold", color: "#78716c", marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 4 },
+  chipScroll: { gap: 8, paddingBottom: 8 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#f5f5f4", borderWidth: 1, borderColor: "#e7e5e4" },
+  chipActive: { backgroundColor: "#292524", borderColor: "#292524" },
+  chipText: { fontSize: 13, fontWeight: "600", color: "#44403c" },
+  chipTextActive: { color: "#ffffff" },
+  customDateRow: { flexDirection: "row", gap: 12, marginTop: 12 },
+  dateInput: { flex: 1, backgroundColor: "#ffffff", height: 45 },
+  divider: { marginVertical: 16, backgroundColor: "#e7e5e4" },
+
+  searchRow: { flexDirection: "row", gap: 12 },
+  searchCol: { flex: 1 },
+  dropdownBtn: { height: 45, justifyContent: "center", paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "#ffffff" },
+  dropdownBtnText: { fontSize: 14, color: "#1c1917" },
+  searchInput: { height: 45, backgroundColor: "#ffffff" },
+  clearBtn: { marginTop: 16, alignSelf: "flex-end" },
+  clearBtnText: { fontSize: 12, fontWeight: "bold", color: "#ef4444", textDecorationLine: "underline" },
+
+  listContainer: { gap: 16 },
+  orderCard: { backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#e7e5e4", padding: 16 },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  idRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  orderId: { fontFamily: "serif", fontSize: 18, fontWeight: "bold", color: "#1c1917" },
+  paymentBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f5f5f4", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  paymentText: { fontSize: 10, fontWeight: "bold", color: "#44403c", textTransform: "uppercase" },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 11, fontWeight: "bold" },
+
+  cardBody: { marginBottom: 16 },
+  clientName: { fontSize: 18, fontWeight: "bold", color: "#1c1917", marginBottom: 2 },
+  orderDate: { fontSize: 13, color: "#78716c", marginBottom: 12 },
+  detailsGrid: { flexDirection: "row", gap: 12 },
+  detailBox: { flex: 1, backgroundColor: "#fafaf9", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f5f5f4" },
+  detailLabel: { fontSize: 10, fontWeight: "bold", color: "#a8a29e", marginBottom: 4 },
+  detailValue: { fontSize: 14, fontWeight: "bold", color: "#1c1917" },
+
+  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 16, borderTopWidth: 1, borderTopColor: "#f5f5f4" },
+  actionButtons: { flexDirection: "row", gap: 8 },
+  iconBtn: { padding: 8, borderRadius: 8, backgroundColor: "#f5f5f4" },
+
+  loader: { marginVertical: 40 },
+  emptyState: { alignItems: "center", paddingVertical: 40 },
+  emptyTitle: { fontFamily: "serif", fontSize: 18, fontWeight: "bold", color: "#44403c", marginTop: 16 },
+  emptySubtitle: { fontSize: 14, color: "#a8a29e", marginTop: 4 },
+
+  pagination: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24 },
+  pageText: { fontSize: 14, fontWeight: "bold", color: "#78716c" },
+
+  modalWrapper: { margin: 20, justifyContent: "center" },
+  modalContainer: { backgroundColor: "#ffffff", borderRadius: 24, padding: 24, maxHeight: "80%" },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontFamily: "serif", fontSize: 22, fontWeight: "bold", color: "#1c1917" },
+  modalSubtitle: { fontSize: 14, color: "#78716c", marginBottom: 20 },
+  modalContent: { paddingBottom: 20 },
+  modalLabel: { fontSize: 11, fontWeight: "bold", color: "#a8a29e", textTransform: "uppercase", marginBottom: 4 },
+  modalValue: { fontSize: 16, fontWeight: "600", color: "#1c1917", marginBottom: 16 },
+  itemRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  itemName: { fontSize: 14, color: "#44403c", flex: 1 },
+  itemPrice: { fontSize: 14, fontWeight: "bold", color: "#1c1917" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalLabel: { fontSize: 16, fontWeight: "bold", color: "#1c1917" },
+  totalValue: { fontFamily: "serif", fontSize: 24, fontWeight: "bold", color: "#1c1917" },
+
+  statusOptions: { gap: 10 },
+  statusOptionBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#e7e5e4", backgroundColor: "#fafaf9" },
+  statusOptionText: { fontSize: 14, fontWeight: "bold" },
+
+  userItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f5f5f4" },
+  userItemText: { fontSize: 16, color: "#44403c" },
+});

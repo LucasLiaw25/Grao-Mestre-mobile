@@ -1,4 +1,3 @@
-// app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -7,37 +6,16 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#6B4F4F",
-        tabBarInactiveTintColor: "#9CA3AF",
-        tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopWidth: 1,
-          borderTopColor: "#E5E7EB",
-          height: 60,
-          paddingBottom: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-        },
+        // Adicione esta linha abaixo para esconder a barra completamente
+        tabBarStyle: { display: "none" }, 
       }}
     >
       <Tabs.Screen
-        name="index" // Corresponde a app/(tabs)/index.tsx
+        name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="explore" // Corresponde a app/(tabs)/explore.tsx
-        options={{
-          title: "Explore",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="compass-outline" size={size} color={color} />
-          ),
+          // Se a barra está escondida, os ícones não aparecerão, 
+          // mas é bom manter a definição da Screen.
         }}
       />
     </Tabs>

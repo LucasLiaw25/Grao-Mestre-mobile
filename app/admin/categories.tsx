@@ -1,741 +1,303 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  FlatList,
-  TextInput,
-  Modal,
-  ScrollView,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-  Animated,
+import React, { useState, useMemo } from "react";
+import { 
+  View, 
+  StyleSheet, 
+  Dimensions, 
+  TouchableOpacity, 
+  FlatListProps, 
+  Alert 
 } from "react-native";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Loader2,
-  Tag,
-  X,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react-native";
+import { 
+  Text, 
+  ActivityIndicator, 
+  Portal, 
+  Modal, 
+  TextInput, 
+  Button, 
+  Searchbar 
+} from 'react-native-paper';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios"; // Assumindo que categoriesApi é um wrapper para axios
+import { categoriesApi } from "@/src/lib/api";
+import { CategoryResponseDTO, CategoryRequestDTO } from "@/src/types";
+import Animated, { 
+  FadeInUp, 
+  Layout, 
+  useSharedValue, 
+  useAnimatedScrollHandler 
+} from "react-native-reanimated";
+import { Tag, Edit, Trash2, Plus, Search, X } from "lucide-react-native";
+import { FlatList } from "react-native-gesture-handler";
 
-// Mock de useToast para React Native
-const useToast = () => ({
-  toast: ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
-    console.log(`Toast: ${title} - ${description} (Variant: ${variant})`);
-    // Implementar um toast nativo aqui, como ToastAndroid ou um componente customizado
-  },
-});
+const { width } = Dimensions.get("window");
+const AnimatedFlatList = Animated.createAnimatedComponent<FlatListProps<CategoryResponseDTO>>(FlatList);
 
-// Habilitar LayoutAnimation para Android
-if (Platform.OS === "android") {
-  UIManager.setLayoutAnimationEnabledExperimental &&
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Tipos
-interface CategoryRequestDTO {
-  name: string;
-  description?: string;
-}
-
-interface CategoryResponseDTO {
-  id: number;
-  name: string;
-  description?: string;
-}
-
-// Mock da API de categorias
-const categoriesApi = {
-  getAll: async () => {
-    console.log("Fetching all categories");
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    const mockCategories: CategoryResponseDTO[] = [
-      { id: 1, name: "Cafés Especiais", description: "Grãos selecionados e métodos de preparo únicos." },
-      { id: 2, name: "Salgados Artesanais", description: "Opções frescas e feitas à mão para acompanhar seu café." },
-      { id: 3, name: "Doces Finos", description: "Sobremesas delicadas e saborosas." },
-      { id: 4, name: "Bebidas Geladas", description: "Refrescantes opções para os dias quentes." },
-      { id: 5, name: "Chás e Infusões", description: "Variedade de chás quentes e gelados." },
-      { id: 6, name: "Pães e Torradas", description: "Opções para o café da manhã ou lanche." },
-    ];
-    return { data: mockCategories };
-  },
-  create: async (newCategory: CategoryRequestDTO) => {
-    console.log("Creating category:", newCategory);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    return { data: { id: Math.floor(Math.random() * 1000) + 100, ...newCategory } };
-  },
-  update: async (id: number, updatedCategory: CategoryRequestDTO) => {
-    console.log(`Updating category ${id}:`, updatedCategory);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    return { data: { id, ...updatedCategory } };
-  },
-  delete: async (id: number) => {
-    console.log(`Deleting category ${id}`);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    return { data: null };
-  },
+// Design System: Old Money / Stone Palette
+const COLORS = {
+  background: "#FAF9F6", // Creme suave
+  surface: "#FFFFFF",
+  primary: "#2C2826",    // Stone 900
+  secondary: "#78716C",  // Stone 500
+  accent: "#9A5B32",     // Marrom assinatura
+  border: "#E7E5E4",     // Stone 200
+  error: "#991B1B",
+  inputBg: "#F5F5F4",
 };
 
-// Componente de Card de Categoria
-const CategoryCard: React.FC<{
-  category: CategoryResponseDTO;
-  onEdit: (category: CategoryResponseDTO) => void;
-  onDelete: (id: number) => void;
-  isDeleting: boolean;
-  index: number;
-}> = ({ category, onEdit, onDelete, isDeleting, index }) => {
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(12);
+export default function CategoriesManagement() {
+  const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryResponseDTO | null>(null);
+  const [formData, setFormData] = useState<CategoryRequestDTO>({ name: '', description: '' });
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        delay: index * 50,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 250,
-        delay: index * 50,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, slideAnim, index]);
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
-  return (
-    <Animated.View
-      style={[
-        styles.categoryCard,
-        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-      ]}
+  // API Integration (Mantida conforme solicitado)
+  const { data: categories, isLoading } = useQuery<CategoryResponseDTO[]>({
+    queryKey: ["admin-categories"],
+    queryFn: async () => {
+      const response = await categoriesApi.getAll();
+      const data = response.data as any;
+      return data.content || data;
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (data: CategoryRequestDTO) => 
+      editingCategory 
+        ? categoriesApi.update(editingCategory.id, data) 
+        : categoriesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+      closeModal();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => categoriesApi.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-categories"] }),
+  });
+
+  // UX: Filtro derivado do "Painel" web
+  const filteredCategories = useMemo(() => {
+    if (!categories) return [];
+    return categories.filter(c => 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [categories, searchQuery]);
+
+  const openModal = (category?: CategoryResponseDTO) => {
+    if (category) {
+      setEditingCategory(category);
+      setFormData({ name: category.name, description: category.description || '' });
+    } else {
+      setEditingCategory(null);
+      setFormData({ name: '', description: '' });
+    }
+    setIsModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setIsModalVisible(false);
+    setEditingCategory(null);
+    setFormData({ name: '', description: '' });
+  };
+
+  const handleDelete = (id: number) => {
+    Alert.alert("Excluir Categoria", "Deseja realmente remover esta categoria?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Excluir", style: "destructive", onPress: () => deleteMutation.mutate(id) }
+    ]);
+  };
+
+  // Renderização do Card de Categoria (Referência ao estilo de Usuário/Produto)
+  const renderCategoryCard = ({ item, index }: { item: CategoryResponseDTO, index: number }) => (
+    <Animated.View 
+      entering={FadeInUp.delay(index * 100).duration(500)}
+      layout={Layout.springify()}
+      style={styles.card}
     >
-      <View style={styles.categoryCardContent}>
-        <View style={styles.categoryCardHeader}>
-          <Tag size={20} color={styles.categoryCardIcon.color} />
-          <View style={styles.categoryCardTextGroup}>
-            <Text style={styles.categoryCardName}>{category.name}</Text>
-            <Text style={styles.categoryCardDescription} numberOfLines={2}>
-              {category.description || "Sem descrição"}
-            </Text>
-          </View>
+      <View style={styles.cardHeader}>
+        <View style={styles.iconContainer}>
+          <Tag size={20} color={COLORS.accent} />
         </View>
-        <View style={styles.categoryCardActions}>
-          <TouchableOpacity
-            onPress={() => onEdit(category)}
-            style={styles.actionButton}
-            disabled={isDeleting}
-          >
-            <Edit size={18} color={styles.actionButtonText.color} />
-            <Text style={styles.actionButtonText}>Editar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onDelete(category.id)}
-            style={[styles.actionButton, styles.deleteButton]}
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color={styles.deleteButtonText.color} />
-            ) : (
-              <Trash2 size={18} color={styles.deleteButtonText.color} />
-            )}
-            <Text style={styles.deleteButtonText}>Excluir</Text>
-          </TouchableOpacity>
+        <View style={styles.titleContainer}>
+          <Text style={styles.categoryName}>{item.name}</Text>
+          <Text style={styles.categoryDescription} numberOfLines={2}>
+            {item.description || "Sem descrição disponível."}
+          </Text>
         </View>
+      </View>
+      
+      <View style={styles.cardActions}>
+        <TouchableOpacity 
+          onPress={() => openModal(item)}
+          style={[styles.actionBtn, { borderColor: COLORS.border }]}
+        >
+          <Edit size={16} color={COLORS.secondary} />
+          <Text style={styles.actionText}>Editar</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => handleDelete(item.id)}
+          style={[styles.actionBtn, { borderColor: 'transparent' }]}
+        >
+          <Trash2 size={16} color={COLORS.error} />
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
-};
-
-// Componente principal
-export default function CategoryManagement() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<CategoryResponseDTO | null>(null);
-  const [categoryForm, setCategoryForm] = useState<CategoryRequestDTO>({
-    name: "",
-    description: "",
-  });
-  const [showDescription, setShowDescription] = useState(false);
-
-  // Fetch Categories
-  const {
-    data: categories,
-    isLoading: isLoadingCategories,
-    error: categoriesError,
-    refetch,
-  } = useQuery<CategoryResponseDTO[], Error>({
-    queryKey: ["categories"],
-    queryFn: async () => (await categoriesApi.getAll()).data,
-  });
-
-  // Mutations
-  const createCategoryMutation = useMutation({
-    mutationFn: (newCategory: CategoryRequestDTO) => categoriesApi.create(newCategory),
-    onSuccess: () => {
-      toast({ title: "Sucesso", description: "Categoria criada com sucesso." });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      closeFormModal();
-    },
-    onError: (err) => {
-      console.error("Erro ao criar categoria:", err);
-      toast({
-        title: "Erro",
-        description: "Falha ao criar categoria. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateCategoryMutation = useMutation({
-    mutationFn: (updatedCategory: { id: number; data: CategoryRequestDTO }) =>
-      categoriesApi.update(updatedCategory.id, updatedCategory.data),
-    onSuccess: () => {
-      toast({ title: "Sucesso", description: "Categoria atualizada com sucesso." });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      closeFormModal();
-    },
-    onError: (err) => {
-      console.error("Erro ao atualizar categoria:", err);
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar categoria. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: (id: number) => categoriesApi.delete(id),
-    onSuccess: () => {
-      toast({ title: "Sucesso", description: "Categoria excluída com sucesso." });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-    },
-    onError: (err) => {
-      console.error("Erro ao excluir categoria:", err);
-      toast({
-        title: "Erro",
-        description: "Falha ao excluir categoria. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // --- Form Handlers ---
-  const handleInputChange = (name: string, value: string) => {
-    setCategoryForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const openCreateModal = () => {
-    setEditingCategory(null);
-    setCategoryForm({
-      name: "",
-      description: "",
-    });
-    setShowDescription(false);
-    setIsFormModalOpen(true);
-  };
-
-  const openEditModal = (category: CategoryResponseDTO) => {
-    setEditingCategory(category);
-    setCategoryForm({
-      name: category.name,
-      description: category.description || "",
-    });
-    setShowDescription(!!category.description);
-    setIsFormModalOpen(true);
-  };
-
-  const closeFormModal = () => {
-    setIsFormModalOpen(false);
-    setEditingCategory(null);
-    setCategoryForm({
-      name: "",
-      description: "",
-    });
-    setShowDescription(false);
-  };
-
-  const handleSubmit = () => {
-    if (editingCategory) {
-      updateCategoryMutation.mutate({ id: editingCategory.id, data: categoryForm });
-    } else {
-      createCategoryMutation.mutate(categoryForm);
-    }
-  };
-
-  const toggleDescriptionVisibility = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setShowDescription((prev) => !prev);
-  };
-
-  if (isLoadingCategories) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={styles.spinner.color} />
-        <Text style={styles.loadingText}>Carregando categorias…</Text>
-      </View>
-    );
-  }
-
-  if (categoriesError) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Erro ao carregar dados</Text>
-        <Text style={styles.errorDescription}>Por favor, tente novamente mais tarde.</Text>
-        <TouchableOpacity onPress={() => refetch()} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
+      {/* Header Estilo Old Money */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Gerenciamento de Categorias</Text>
-        <TouchableOpacity onPress={openCreateModal} style={styles.addButton}>
-          <Plus size={20} color={styles.addButtonText.color} />
-          <Text style={styles.addButtonText}>Nova Categoria</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.listContainer}>
-        {categories && categories.length > 0 ? (
-          <FlatList
-            data={categories}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item, index }) => (
-              <CategoryCard
-                category={item}
-                onEdit={openEditModal}
-                onDelete={deleteCategoryMutation.mutate}
-                isDeleting={deleteCategoryMutation.isPending}
-                index={index}
-              />
-            )}
-            contentContainerStyle={styles.flatListContent}
+        <Text style={styles.headerSubtitle}>GERENCIAMENTO</Text>
+        <Text style={styles.headerTitle}>Categorias</Text>
+        
+        <View style={styles.filterContainer}>
+          <Searchbar
+            placeholder="Buscar categoria..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchBar}
+            iconColor={COLORS.secondary}
+            inputStyle={styles.searchInput}
+            placeholderTextColor={COLORS.secondary}
           />
-        ) : (
-          <View style={styles.emptyStateContainer}>
-            <Tag size={64} color={styles.emptyStateIcon.color} style={styles.emptyStateIcon} />
-            <Text style={styles.emptyStateTitle}>Nenhuma categoria encontrada.</Text>
-            <Text style={styles.emptyStateDescription}>Comece adicionando uma nova!</Text>
-            <TouchableOpacity onPress={openCreateModal} style={styles.emptyStateButton}>
-              <Text style={styles.emptyStateButtonText}>Adicionar Categoria</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Category Form Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={isFormModalOpen}
-        onRequestClose={closeFormModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingCategory ? "Editar Categoria" : "Criar Nova Categoria"}
-              </Text>
-              <TouchableOpacity onPress={closeFormModal} style={styles.modalCloseButton}>
-                <X size={24} color={styles.modalCloseButtonIcon.color} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Nome</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={categoryForm.name}
-                  onChangeText={(text) => handleInputChange("name", text)}
-                  placeholder="Nome da categoria"
-                  placeholderTextColor={styles.formInputPlaceholder.color}
-                  required
-                />
-              </View>
-
-              <TouchableOpacity onPress={toggleDescriptionVisibility} style={styles.toggleDescriptionButton}>
-                <Text style={styles.toggleDescriptionButtonText}>
-                  {showDescription ? "Ocultar descrição" : "Adicionar descrição (opcional)"}
-                </Text>
-                {showDescription ? (
-                  <ChevronUp size={16} color={styles.toggleDescriptionButtonText.color} />
-                ) : (
-                  <ChevronDown size={16} color={styles.toggleDescriptionButtonText.color} />
-                )}
-              </TouchableOpacity>
-
-              {showDescription && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Descrição</Text>
-                  <TextInput
-                    style={[styles.formInput, styles.formTextarea]}
-                    value={categoryForm.description}
-                    onChangeText={(text) => handleInputChange("description", text)}
-                    placeholder="Descrição detalhada da categoria"
-                    placeholderTextColor={styles.formInputPlaceholder.color}
-                    multiline
-                    numberOfLines={4}
-                  />
-                </View>
-              )}
-            </ScrollView>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity onPress={closeFormModal} style={[styles.modalButton, styles.modalButtonSecondary]}>
-                <Text style={styles.modalButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSubmit}
-                style={styles.modalButton}
-                disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
-              >
-                {createCategoryMutation.isPending || updateCategoryMutation.isPending ? (
-                  <ActivityIndicator size="small" color={styles.modalButtonText.color} />
-                ) : (
-                  <Text style={styles.modalButtonText}>
-                    {editingCategory ? "Salvar Alterações" : "Criar Categoria"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{filteredCategories.length}</Text>
           </View>
         </View>
-      </Modal>
+      </View>
+
+      {isLoading ? (
+        <ActivityIndicator animating color={COLORS.accent} style={styles.loader} />
+      ) : (
+        <AnimatedFlatList
+          data={filteredCategories}
+          renderItem={renderCategoryCard}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>Nenhuma categoria encontrada.</Text>
+          }
+        />
+      )}
+
+      {/* FAB Sofisticado */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => openModal()}
+        activeOpacity={0.8}
+      >
+        <Plus color="#FFF" size={24} />
+      </TouchableOpacity>
+
+      {/* Modal de Formulário (Adaptação da UI/UX Web para Mobile) */}
+      <Portal>
+        <Modal 
+          visible={isModalVisible} 
+          onDismiss={closeModal} 
+          contentContainerStyle={styles.modalContent}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {editingCategory ? "Editar Categoria" : "Nova Categoria"}
+            </Text>
+            <TouchableOpacity onPress={closeModal}>
+              <X size={24} color={COLORS.secondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nome da Categoria</Text>
+              <TextInput
+                mode="flat"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                placeholder="Ex: Cafés Especiais"
+                style={styles.input}
+                underlineColor="transparent"
+                activeUnderlineColor={COLORS.accent}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Descrição</Text>
+              <TextInput
+                mode="flat"
+                value={formData.description}
+                onChangeText={(text) => setFormData({ ...formData, description: text })}
+                placeholder="Descreva o propósito desta categoria..."
+                multiline
+                numberOfLines={4}
+                style={[styles.input, { height: 100, paddingTop: 10 }]}
+                underlineColor="transparent"
+                activeUnderlineColor={COLORS.accent}
+              />
+            </View>
+
+            <Button 
+              mode="contained" 
+              onPress={() => saveMutation.mutate(formData)}
+              loading={saveMutation.isPending}
+              style={styles.saveBtn}
+              buttonColor={COLORS.primary}
+              labelStyle={styles.saveBtnLabel}
+            >
+              {editingCategory ? "Salvar Alterações" : "Criar Categoria"}
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E9", // bg-background
-    paddingTop: 24,
-    paddingHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F5F0E9",
-  },
-  spinner: {
-    color: "#8B5E3C", // text-primary
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#736C63", // text-muted-foreground
-    marginTop: 12,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F5F0E9",
-    padding: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontFamily: "serif",
-    fontWeight: "bold",
-    color: "#EF4444", // text-destructive
-    marginBottom: 8,
-  },
-  errorDescription: {
-    fontSize: 16,
-    color: "#736C63", // text-muted-foreground
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: "#8B5E3C", // bg-primary
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  retryButtonText: {
-    color: "#FFFFFF", // text-primary-foreground
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: { padding: 24, paddingTop: 60, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  headerSubtitle: { fontSize: 10, letterSpacing: 2, color: COLORS.accent, fontWeight: "bold", marginBottom: 4 },
+  headerTitle: { fontSize: 32, fontFamily: 'serif', fontWeight: "bold", color: COLORS.primary },
+  
+  filterContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 12 },
+  searchBar: { flex: 1, backgroundColor: COLORS.inputBg, borderRadius: 12, height: 45, elevation: 0 },
+  searchInput: { fontSize: 14, minHeight: 0 },
+  countBadge: { backgroundColor: COLORS.inputBg, paddingHorizontal: 12, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  countText: { fontWeight: 'bold', color: COLORS.primary },
 
-  // Header
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  headerTitle: {
-    fontFamily: "serif",
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#2C1B10", // text-foreground
-  },
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#8B5E3C", // bg-primary
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  addButtonText: {
-    color: "#FFFFFF", // text-primary-foreground
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  listContent: { padding: 20, paddingBottom: 100 },
+  card: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
+  cardHeader: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  iconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' },
+  titleContainer: { flex: 1 },
+  categoryName: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
+  categoryDescription: { fontSize: 14, color: COLORS.secondary, lineHeight: 20 },
+  
+  cardActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },
+  actionText: { fontSize: 13, fontWeight: '600', color: COLORS.secondary },
 
-  // List
-  listContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF", // bg-card
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#D4C7B8", // border-border/50
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  flatListContent: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-
-  // Category Card
-  categoryCard: {
-    backgroundColor: "#FFFFFF", // bg-card
-    borderColor: "#E5E0D9", // border-border
-    borderWidth: 1,
-    borderRadius: 12,
-    marginBottom: 12,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  categoryCardContent: {
-    padding: 16,
-  },
-  categoryCardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 12,
-  },
-  categoryCardIcon: {
-    color: "#8B5E3C", // text-primary
-    marginTop: 2,
-  },
-  categoryCardTextGroup: {
-    flex: 1,
-  },
-  categoryCardName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#2C1B10", // text-foreground
-    marginBottom: 4,
-  },
-  categoryCardDescription: {
-    fontSize: 14,
-    color: "#736C63", // text-muted-foreground
-  },
-  categoryCardActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderColor: "#E5E0D9", // border-border
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#D4C7B8", // border-border/60
-    backgroundColor: "#F5F0E9", // bg-muted/30
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#736C63", // text-muted-foreground
-  },
-  deleteButton: {
-    borderColor: "#EF4444", // border-destructive
-    backgroundColor: "rgba(239, 68, 68, 0.1)", // bg-destructive/10
-  },
-  deleteButtonText: {
-    color: "#EF4444", // text-destructive
-  },
-
-  // Empty State
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 24,
-  },
-  emptyStateIcon: {
-    color: "rgba(115, 108, 99, 0.5)", // text-muted-foreground/50
-    marginBottom: 24,
-  },
-  emptyStateTitle: {
-    fontFamily: "serif",
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#2C1B10", // text-foreground
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptyStateDescription: {
-    fontSize: 16,
-    color: "#736C63", // text-muted-foreground
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  emptyStateButton: {
-    backgroundColor: "#8B5E3C", // bg-primary
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  emptyStateButtonText: {
-    color: "#FFFFFF", // text-primary-foreground
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF", // bg-card
-    borderRadius: 16,
-    width: "90%",
-    maxWidth: 450,
-    maxHeight: "80%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderColor: "#E5E0D9", // border-border
-  },
-  modalTitle: {
-    fontFamily: "serif",
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#2C1B10", // text-foreground
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalCloseButtonIcon: {
-    color: "#736C63", // text-muted-foreground
-  },
-  modalBody: {
-    padding: 20,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#2C1B10", // text-foreground
-    marginBottom: 8,
-  },
-  formInput: {
-    backgroundColor: "#F5F0E9", // bg-background
-    borderColor: "#D4C7B8", // border-border
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: "#2C1B10", // text-foreground
-  },
-  formInputPlaceholder: {
-    color: "#A19B93", // text-muted-foreground
-  },
-  formTextarea: {
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  toggleDescriptionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  toggleDescriptionButtonText: {
-    fontSize: 14,
-    color: "#8B5E3C", // text-primary
-    fontWeight: "500",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderColor: "#E5E0D9", // border-border
-  },
-  modalButton: {
-    backgroundColor: "#8B5E3C", // bg-primary
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 120,
-  },
-  modalButtonSecondary: {
-    backgroundColor: "#D4C7B8", // bg-muted
-  },
-  modalButtonText: {
-    color: "#FFFFFF", // text-primary-foreground
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  fab: { position: 'absolute', bottom: 30, right: 24, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.accent, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6 },
+  
+  modalContent: { backgroundColor: COLORS.surface, margin: 20, borderRadius: 24, padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontFamily: 'serif', fontWeight: 'bold', color: COLORS.primary },
+  form: { gap: 20 },
+  inputGroup: { gap: 8 },
+  label: { fontSize: 12, fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 0.5 },
+  input: { backgroundColor: COLORS.inputBg, borderRadius: 12, fontSize: 15 },
+  saveBtn: { borderRadius: 12, marginTop: 10, paddingVertical: 6 },
+  saveBtnLabel: { fontSize: 16, fontWeight: 'bold' },
+  
+  loader: { flex: 1, justifyContent: 'center' },
+  emptyText: { textAlign: 'center', marginTop: 40, color: COLORS.secondary, fontStyle: 'italic' }
 });

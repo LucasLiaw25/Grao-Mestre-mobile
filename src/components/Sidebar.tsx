@@ -1,4 +1,3 @@
-// Sidebar.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -8,9 +7,9 @@ import {
   Dimensions,
   ScrollView,
   Platform,
+  Pressable,
 } from "react-native";
-import { useRouter, usePathname } from "expo-router"; // Adicionado usePathname
-// REMOVA: import { useNavigation, useRoute } from "@react-navigation/native";
+import { useRouter, usePathname, Href } from "expo-router";
 import {
   User,
   Tag,
@@ -21,6 +20,7 @@ import {
   Menu,
   X,
   Wallet,
+  LogOut,
 } from "lucide-react-native";
 import Animated, {
   useSharedValue,
@@ -28,268 +28,193 @@ import Animated, {
   useAnimatedStyle,
   Easing,
 } from "react-native-reanimated";
+import { useAuth } from "@/src/hooks/use-auth";
 
 const { width } = Dimensions.get("window");
-const SIDEBAR_WIDTH = width * 0.75; // 75% da largura da tela para o sidebar
+const SIDEBAR_WIDTH = width * 0.75;
+
+// Interface para garantir que os links sejam rotas válidas
+interface NavItem {
+  to: Href;
+  label: string;
+  icon: React.ElementType;
+}
 
 export function Sidebar() {
   const router = useRouter();
-  // REMOVA: const navigation = useNavigation();
-  const pathname = usePathname(); // Use usePathname do expo-router
+  const pathname = usePathname();
+  const { logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
   const translateX = useSharedValue(-SIDEBAR_WIDTH);
   const overlayOpacity = useSharedValue(0);
 
-  useEffect(() => {
-    if (isOpen) {
-      translateX.value = withTiming(0, {
-        duration: 300,
-        easing: Easing.out(Easing.ease),
-      });
-      overlayOpacity.value = withTiming(1, { duration: 300 });
-    } else {
-      translateX.value = withTiming(-SIDEBAR_WIDTH, {
-        duration: 300,
-        easing: Easing.in(Easing.ease),
-      });
-      overlayOpacity.value = withTiming(0, { duration: 300 });
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    // Fecha o sidebar quando a rota muda
-    setIsOpen(false);
-  }, [pathname]); // Use pathname para detectar mudança de rota
-
-  const animatedSidebarStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateX: translateX.value }],
-    };
-  });
-
-  const animatedOverlayStyle = useAnimatedStyle(() => {
-    return {
-      opacity: overlayOpacity.value,
-      pointerEvents: isOpen ? "auto" : "none",
-    };
-  });
-
   const navItems = [
-    { to: "/admin/dashboard", label: "Dashboard Overview", icon: LayoutDashboard },
-    { to: "/admin/users", label: "Users", icon: User },
-    { to: "/admin/categories", label: "Categories", icon: Tag },
-    { to: "/admin/products", label: "Products", icon: Coffee },
-    { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
-    { to: "/admin/reports", label: "Reports", icon: BarChart3 },
-    { to: "/admin/expenses", label: "Expense", icon: Wallet },
-  ];
+    { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/admin/users", label: "Usuários", icon: User },
+    { to: "/admin/categories", label: "Categorias", icon: Tag },
+    { to: "/admin/products", label: "Produtos", icon: Coffee },
+    { to: "/admin/orders", label: "Pedidos", icon: ShoppingBag },
+    { to: "/admin/reports", label: "Relatórios", icon: BarChart3 },
+    { to: "/admin/expenses", label: "Despesas", icon: Wallet },
+  ] as const;
 
-  const SidebarContent = () => (
-    <View style={styles.sidebarContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity
-            onPress={() => {
-            router.push("/login"); // Use router.push com o path
-            }}
-        >
-          {/* Você pode colocar um logo ou texto aqui */}
-          <Text style={styles.logoText}>Admin.</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setIsOpen(false)}
-          style={styles.closeButton}
-        >
-          <X size={20} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
+  const toggleSidebar = (open: boolean) => {
+    setIsOpen(open);
+    translateX.value = withTiming(open ? 0 : -SIDEBAR_WIDTH, {
+      duration: 300,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    });
+    overlayOpacity.value = withTiming(open ? 1 : 0, { duration: 300 });
+  };
 
-      <ScrollView style={styles.navScroll}>
-        <View style={styles.navItemsContainer}>
-          {navItems.map((item) => {
-            const isActive = pathname === item.to; // Compare com pathname
-            return (
-              <TouchableOpacity
-                key={item.to}
-                onPress={() => {
-                  router.push(item.to); // Use router.push com o path
-                  setIsOpen(false);
-                }}
-                style={[
-                  styles.navItem,
-                  isActive ? styles.navItemActive : styles.navItemInactive,
-                ]}
-              >
-                <item.icon
-                  size={18}
-                  color={isActive ? "#007AFF" : "#6B7280"}
-                  style={isActive ? {} : { opacity: 0.6 }}
-                />
-                <Text
-                  style={[
-                    styles.navItemText,
-                    isActive ? styles.navItemTextActive : {},
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+  const navigateTo = (dest: Href) => {
+    toggleSidebar(false);
+    router.push(dest);
+  };
 
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>Admin System</Text>
-        <Text style={styles.footerText}>
-          © {new Date().getFullYear()} Grão Mestre.
-        </Text>
-        <Text style={styles.footerText}>Curated Excellence.</Text>
-      </View>
-    </View>
-  );
+  const sidebarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+    display: overlayOpacity.value === 0 && !isOpen ? 'none' : 'flex',
+  }));
 
   return (
     <>
-      {!isOpen && (
-        <TouchableOpacity
-          onPress={() => setIsOpen(true)}
-          style={styles.menuButton}
-        >
-          <Menu size={20} color="#333" />
-        </TouchableOpacity>
-      )}
 
-      <Animated.View
-        style={[styles.overlay, animatedOverlayStyle]}
-        onTouchStart={() => setIsOpen(false)}
-      />
+      <TouchableOpacity 
+        style={styles.triggerBtn} 
+        onPress={() => toggleSidebar(true)}
+      >
+        <Menu size={28} color="#1c1917" />
+      </TouchableOpacity>
 
-      <Animated.View style={[styles.drawer, animatedSidebarStyle]}>
-        <SidebarContent />
+      {/* Overlay de fundo */}
+      <Animated.View style={[styles.overlay, overlayStyle]}>
+        <Pressable style={styles.pressableOverlay} onPress={() => toggleSidebar(false)} />
+      </Animated.View>
+
+      {/* Container da Sidebar */}
+      <Animated.View style={[styles.sidebarContainer, sidebarStyle]}>
+        <View style={styles.header}>
+          <Text style={styles.logoText}>Grão Mestre</Text>
+          <TouchableOpacity onPress={() => toggleSidebar(false)} style={styles.closeBtn}>
+            <X size={24} color="#44403c" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.navScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.navItemsContainer}>
+            {navItems.map((item) => {
+              const isActive = pathname === item.to;
+              return (
+                <TouchableOpacity
+                  key={item.to}
+                  onPress={() => navigateTo(item.to)}
+                  style={[styles.navItem, isActive && styles.navItemActive]}
+                >
+                  <item.icon 
+                    size={22} 
+                    color={isActive ? "#1c1917" : "#78716c"} 
+                  />
+                  <Text style={[styles.navItemText, isActive && styles.navItemTextActive]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        
       </Animated.View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  menuButton: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 50 : 20,
-    left: 20,
-    zIndex: 40,
-    padding: 10,
-    borderRadius: 4,
-    backgroundColor: "#fff",
-    borderColor: "#E5E7EB",
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+  triggerBtn: {
+    padding: 16,
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 10,
+    left: 10,
+    zIndex: 90,
   },
   overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.4)",
-    zIndex: 60,
+    zIndex: 100,
   },
-  drawer: {
+  pressableOverlay: { flex: 1 },
+  sidebarContainer: {
     position: "absolute",
-    top: 0,
     left: 0,
+    top: 0,
     bottom: 0,
     width: SIDEBAR_WIDTH,
-    zIndex: 70,
-  },
-  sidebarContainer: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRightWidth: 1,
-    borderRightColor: "#E5E7EB",
-    padding: 24,
+    backgroundColor: "#ffffff",
+    zIndex: 101,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
     shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 10,
     elevation: 5,
   },
   header: {
-    marginBottom: 40,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   logoText: {
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
-    letterSpacing: -0.5,
-    color: "#333",
-    fontStyle: "italic",
+    color: "#1c1917",
   },
-  closeButton: {
-    padding: 6,
-    borderRadius: 2,
-  },
-  navScroll: {
-    flex: 1,
-    marginRight: -8,
-    paddingRight: 8,
-  },
-  navItemsContainer: {
-    marginBottom: 10,
-  },
+  closeBtn: { padding: 4 },
+  navScroll: { flex: 1 },
+  navItemsContainer: { paddingHorizontal: 12 },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 10,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 2,
-    marginBottom: 6,
+    borderRadius: 12,
+    marginBottom: 4,
   },
   navItemActive: {
-    backgroundColor: "rgba(0, 122, 255, 0.1)",
-    borderLeftWidth: 2,
-    borderLeftColor: "#007AFF",
-  },
-  navItemInactive: {
-    backgroundColor: "transparent",
-    borderLeftWidth: 2,
-    borderLeftColor: "transparent",
+    backgroundColor: "#f5f5f4",
   },
   navItemText: {
-    fontSize: 14,
-    letterSpacing: 0.2,
-    color: "#6B7280",
+    fontSize: 15,
+    color: "#78716c",
+    fontWeight: "500",
   },
   navItemTextActive: {
-    fontWeight: "600",
-    color: "#007AFF",
+    color: "#1c1917",
+    fontWeight: "bold",
   },
   footer: {
-    marginTop: "auto",
-    paddingTop: 24,
+    padding: 20,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#e7e5e4",
   },
-  footerTitle: {
-    fontSize: 10,
-    letterSpacing: 2,
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+  },
+  logoutText: {
+    color: "#ef4444",
     fontWeight: "bold",
-    marginBottom: 6,
-    color: "rgba(51,51,51,0.7)",
-    textTransform: "uppercase",
-  },
-  footerText: {
-    fontFamily: "serif",
-    fontStyle: "italic",
-    fontSize: 12,
-    color: "rgba(107,114,128,0.5)",
+    fontSize: 15,
   },
 });

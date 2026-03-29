@@ -1,311 +1,353 @@
-// src/components/Navbar.tsx
-import React, { useEffect, useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
-    Dimensions,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Dimensions,
 } from "react-native";
-// REMOVA: import { useNavigation, useRoute } from "@react-navigation/native";
-
 import { useAuth } from "@/src/hooks/use-auth";
-
+import { useRouter, usePathname, Href } from "expo-router";
+import {
+  Menu,
+  ShoppingBag,
+  User,
+  X,
+  LayoutDashboard,
+  Home,
+  Coffee,
+  BookOpen,
+  UserCircle,
+} from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
-import { usePathname, useRouter } from "expo-router"; // Adicionado usePathname
-import { Menu, ShoppingBag, User, X } from "lucide-react-native";
-import { MotiView, useAnimationState } from "moti";
-import { OrderResponseDTO, OrderStatus } from "../types";
 import { ordersApi } from "../lib/api";
+import { MotiView, AnimatePresence } from "moti";
 
-const cn = (...classNames: (string | boolean | undefined)[]) =>
-  classNames.filter(Boolean).join(" ");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const { width } = Dimensions.get("window");
+interface NavLinkItem {
+  to: Href;
+  label: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}
 
 export function Navbar() {
   const router = useRouter();
-  // REMOVA: const navigation = useNavigation();
-  const pathname = usePathname(); // Use usePathname do expo-router
-  const { isAuthenticated, logout, user } = useAuth();
+  const pathname = usePathname();
+  const { isAuthenticated, user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const mobileMenuAnimationState = useAnimationState({
-    closed: {
-      opacity: 0,
-      height: 0,
-    },
-    open: {
-      opacity: 1,
-      height: "auto",
-    },
-  });
+  const isAdmin = user?.scopes?.some((s: any) => s.name === "ADMIN");
 
-  useEffect(() => {
-    // Fecha o menu mobile quando a rota muda
-    if (isMobileMenuOpen) {
-      setIsMobileMenuOpen(false);
-      mobileMenuAnimationState.transitionTo("closed");
-    }
-  }, [pathname]); // Use pathname para detectar mudança de rota
-
-  const { data: pendingOrder } = useQuery<OrderResponseDTO | undefined>({
-    queryKey: ["pendingOrder", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return undefined;
-      const response = await ordersApi.filter({
-        userId: user.id,
-        status: "PENDING" as OrderStatus,
-      });
-      return response.data?.content?.[0] || undefined;
-    },
-    enabled: isAuthenticated && !!user?.id,
-    staleTime: 0,
-    refetchInterval: 10 * 1000,
-    refetchOnWindowFocus: true,
-  });
-
-  const cartItemCount =
-    pendingOrder?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-
-  const navLinks = [
-    { to: "/", label: "Home" }, // Use "/" para a rota index
-    { to: "/products", label: "Shop Products" }, // Path para app/products.tsx
-    { to: "/our-story", label: "Our Story" }, // Path para app/our-story.tsx
+  // Definição dinâmica dos links de navegação
+  const navLinks: NavLinkItem[] = [
+    { to: "/" as Href, label: "Home", icon: Home },
+    { to: "/products" as Href, label: "Produtos", icon: Coffee },
+    { to: "/our-story" as Href, label: "Nossa História", icon: BookOpen },
+    ...(isAdmin
+      ? [{ to: "/admin/dashboard" as Href, label: "Dashboard", icon: LayoutDashboard }]
+      : []),
+    ...(isAuthenticated
+      ? [{ to: "/account" as Href, label: "Sua Conta", icon: UserCircle }]
+      : []),
   ];
 
-  const headerStyle = {
-    backgroundColor: "hsla(30, 25%, 97%, 0.95)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 5, // Para Android
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "hsla(30, 15%, 88%, 1)",
+  // Busca de pedidos pendentes para o Badge do carrinho
+  const { data: pendingOrdersData } = useQuery({
+    queryKey: ["pendingOrdersSummary"],
+    queryFn: async () => {
+      const res = await ordersApi.getMyOrdersByStatus("PENDING" as any);
+      return res.data;
+    },
+    enabled: isAuthenticated,
+  });
+
+    const pendingItemsCount = useMemo(() => {
+    if (!pendingOrdersData) return 0;
+
+    // Forçamos o TS a entender que pode ser um array ou um objeto com .content
+    const data = pendingOrdersData as any; 
+    
+    const ordersArray = Array.isArray(data)
+      ? data
+      : data.content || [];
+
+    return ordersArray.reduce((sum: number, order: any) => {
+      const itemsSum = (order.items || []).reduce(
+        (s: number, it: any) => s + (it.quantity || 0),
+        0
+      );
+      return sum + itemsSum;
+    }, 0);
+  }, [pendingOrdersData]);
+
+  const navigateTo = (route: Href) => {
+    setIsMobileMenuOpen(false);
+    router.push(route);
   };
 
   return (
-    <>
-      <View style={[styles.header, headerStyle]}>
-        <View style={styles.container}>
-          <View style={styles.contentWrapper}>
+    <View style={styles.wrapper}>
+      <View style={styles.container}>
+        <TouchableOpacity onPress={() => navigateTo("/")} activeOpacity={0.8}>
+          <Text style={styles.logoText}>Grão Mestre</Text>
+        </TouchableOpacity>
+
+        <View style={styles.rightActions}>
+          {isAuthenticated && (
             <TouchableOpacity
-              onPress={() => router.push("/")} // Use router.push com o path
-              style={styles.logoContainer}
+              onPress={() => navigateTo("/orders")}
+              style={styles.iconBtn}
+              activeOpacity={0.8}
             >
-              <Text style={styles.logoText}>Grão Mestre.</Text>
+              <ShoppingBag size={24} color="#1c1917" />
+              {pendingItemsCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {pendingItemsCount > 99 ? "99+" : pendingItemsCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
+          )}
 
-            <View style={styles.rightIcons}>
-              <TouchableOpacity
-                onPress={() => router.push("/orders")} // Use router.push com o path
-                style={styles.cartIconContainer}
-              >
-                <ShoppingBag size={20} color="black" />
-                {cartItemCount > 0 && (
-                  <MotiView
-                    key={cartItemCount}
-                    from={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    style={styles.cartBadge}
-                  >
-                    <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
-                  </MotiView>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setIsMobileMenuOpen(!isMobileMenuOpen);
-                  mobileMenuAnimationState.transitionTo(
-                    isMobileMenuOpen ? "closed" : "open"
-                  );
-                }}
-                style={styles.menuButton}
-              >
-                {isMobileMenuOpen ? (
-                  <X size={24} color="black" />
-                ) : (
-                  <Menu size={24} color="black" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+          <TouchableOpacity
+            onPress={() => setIsMobileMenuOpen((s) => !s)}
+            style={styles.menuBtn}
+            activeOpacity={0.8}
+          >
+            {isMobileMenuOpen ? (
+              <X size={28} color="#1c1917" />
+            ) : (
+              <Menu size={28} color="#1c1917" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Menu Mobile */}
-      <MotiView
-        state={mobileMenuAnimationState}
-        transition={{
-          type: "timing",
-          duration: 300,
-        }}
-        style={styles.mobileMenu}
-      >
-        <View style={styles.mobileMenuContent}>
-          {navLinks.map((link) => (
-            <TouchableOpacity
-              key={link.to}
-              onPress={() => {
-                router.push(link.to);
-                setIsMobileMenuOpen(false);
-                mobileMenuAnimationState.transitionTo("closed");
-              }}
-              style={styles.mobileMenuItem}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Overlay de fundo */}
+            <MotiView
+              from={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ type: "timing", duration: 120 }}
+              style={styles.overlay}
             >
-              <Text style={styles.mobileMenuItemText}>{link.label}</Text>
-            </TouchableOpacity>
-          ))}
-          {isAuthenticated ? (
-            <TouchableOpacity
-              onPress={() => {
-                logout();
-                setIsMobileMenuOpen(false);
-                mobileMenuAnimationState.transitionTo("closed");
-              }}
-              style={[styles.mobileMenuItem, styles.logoutButton]}
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                activeOpacity={1}
+                onPress={() => setIsMobileMenuOpen(false)}
+              />
+            </MotiView>
+
+            {/* Menu Dropdown Animado */}
+            <MotiView
+              from={{ translateY: -SCREEN_HEIGHT, opacity: 0 }}
+              animate={{ translateY: 0, opacity: 1 }}
+              exit={{ translateY: -SCREEN_HEIGHT, opacity: 0 }}
+              transition={{ type: "spring", damping: 70, stiffness: 160 }}
+              style={styles.dropdown}
             >
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => {
-                router.push("/login"); // Use router.push com o path
-                setIsMobileMenuOpen(false);
-                mobileMenuAnimationState.transitionTo("closed");
-              }}
-              style={[styles.mobileMenuItem, styles.signInButton]}
-            >
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            </TouchableOpacity>
-          )}
-          {isAuthenticated && (
-            <TouchableOpacity
-              onPress={() => {
-                router.push("/account"); // Use router.push com o path
-                setIsMobileMenuOpen(false);
-                mobileMenuAnimationState.transitionTo("closed");
-              }}
-              style={styles.mobileMenuItem}
-            >
-              <User size={18} color="black" />
-              <Text style={styles.mobileMenuItemText}>Minha Conta</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </MotiView>
-    </>
+              <View style={styles.navList}>
+                {navLinks.map((link) => {
+                  const isActive = pathname === link.to;
+                  const Icon = link.icon;
+                  return (
+                    <TouchableOpacity
+                      key={String(link.to)}
+                      onPress={() => navigateTo(link.to)}
+                      style={[styles.navItem, isActive && styles.activeNavItem]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.linkContent}>
+                        <Icon size={22} color={isActive ? "#451a03" : "#44403c"} />
+                        <Text
+                          style={[styles.navText, isActive && styles.activeNavText]}
+                        >
+                          {link.label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.divider} />
+
+              {!isAuthenticated ? (
+                <TouchableOpacity
+                  onPress={() => navigateTo("/account")}
+                  style={styles.loginBtn}
+                  activeOpacity={0.8}
+                >
+                  <User size={20} color="white" />
+                  <Text style={styles.loginBtnText}>Entrar ou Cadastrar</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.userInfo}>
+                  <Text style={styles.welcomeText}>
+                    Olá, {user?.name?.split(" ")[0]}
+                  </Text>
+                </View>
+              )}
+            </MotiView>
+          </>
+        )}
+      </AnimatePresence>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 50,
-    height: 80, // Altura fixa para o header
-    justifyContent: "center",
+  wrapper: {
+    zIndex: 1000,
+    backgroundColor: "#ffffff",
+    ...Platform.select({
+      ios: { paddingTop: 44 },
+      android: { paddingTop: 10 },
+    }),
   },
+  sidebarContainer: {
+  paddingTop: Platform.OS === 'ios' ? 45 : 10, 
+},
+header: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingHorizontal: 20,
+  // Reduza o marginBottom de 30 para 15 ou 20
+  marginBottom: 15, 
+  // Opcional: defina uma altura fixa se quiser controle total
+  height: 50, 
+},
   container: {
-    maxWidth: 768,
-    width: "100%",
-    alignSelf: "center",
-    paddingHorizontal: 16,
-  },
-  contentWrapper: {
+    height: 70,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    height: "100%",
-  },
-  logoContainer: {
-    flexShrink: 0,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    backgroundColor: "#ffffff",
+    zIndex: 1005,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f4",
   },
   logoText: {
     fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
-    fontSize: 22,
-    fontWeight: "bold",
-    letterSpacing: -0.5,
-    color: "black",
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1c1917",
   },
-  rightIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16, // gap-4
-  },
-  cartIconContainer: {
-    position: "relative",
-    padding: 8, // p-2
-  },
-  cartBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#FF6347",
-    borderRadius: 12,
-    height: 20,
-    width: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cartBadgeText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  menuButton: {
-    padding: 8,
-  },
-  mobileMenu: {
-    position: "absolute",
-    top: 80,
-    left: 0,
-    right: 0,
-    zIndex: 40,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    overflow: "hidden",
-  },
-  mobileMenuContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
-    gap: 4,
-  },
-  mobileMenuItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+  rightActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  mobileMenuItemText: {
-    fontSize: 16,
+  iconBtn: {
+    padding: 8,
+    position: "relative",
+  },
+  menuBtn: {
+    padding: 8,
+  },
+  badge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "#451a03",
+    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(28, 25, 23, 0.4)",
+    height: SCREEN_HEIGHT,
+    zIndex: 1001,
+  },
+  dropdown: {
+    position: "absolute",
+    top: 70,
+    left: 0,
+    right: 0,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 40,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    zIndex: 1002,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  navList: {
+    gap: 4,
+  },
+  navItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  activeNavItem: {
+    backgroundColor: "#fff7ed",
+  },
+  linkContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  navText: {
+    fontSize: 17,
+    color: "#44403c",
     fontWeight: "500",
-    color: "black",
   },
-  logoutButton: {
-    backgroundColor: "rgba(255, 0, 0, 0.05)",
+  activeNavText: {
+    color: "#451a03",
+    fontWeight: "700",
   },
-  logoutButtonText: {
-    color: "red", // text-destructive
+  divider: {
+    height: 1,
+    backgroundColor: "#f5f5f4",
+    marginVertical: 20,
+  },
+  loginBtn: {
+    backgroundColor: "#1c1917",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 10,
+  },
+  loginBtnText: {
+    color: "white",
+    fontWeight: "bold",
     fontSize: 16,
-    fontWeight: "500",
   },
-  signInButton: {
-    backgroundColor: "rgba(0, 123, 255, 0.05)",
+  userInfo: {
+    alignItems: "center",
+    paddingBottom: 10,
   },
-  signInButtonText: {
-    color: "#007BFF",
-    fontSize: 16,
+  welcomeText: {
+    color: "#78716c",
+    fontSize: 14,
     fontWeight: "500",
   },
 });

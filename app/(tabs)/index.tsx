@@ -1,435 +1,255 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "expo-router";
 import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-
-import { Footer } from "@/src/components/Footer";
-import { ProductCard } from "@/src/components/ProductCard";
-import { productsApi } from "@/src/lib/api";
-import { ProductResponseDTO } from "@/types";
-import { ArrowRight, Coffee, Droplets, Leaf } from "@expo/vector-icons";
+import { View, StyleSheet, Dimensions, TouchableOpacity, FlatListProps, Image } from "react-native";
+import { Text, ActivityIndicator } from 'react-native-paper';
+import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import Animated, {
-  Extrapolate,
-  interpolate,
-  useAnimatedStyle,
-  useScrollViewOffset,
   useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  FadeInUp
 } from "react-native-reanimated";
+import { Leaf, Droplets, Coffee, ArrowRight } from "lucide-react-native";
+import { productsApi } from "@/src/lib/api";
+import { ProductResponseDTO } from "@/src/types";
+import { formatCurrency } from "@/src/lib/format";
+import { FlatList } from "react-native-gesture-handler";
+import { Footer } from "@/src/components/Footer";
+
+const { width, height } = Dimensions.get("window");
+const AnimatedFlatList = Animated.createAnimatedComponent<FlatListProps<ProductResponseDTO>>(FlatList);
+const CARD_WIDTH = (width / 2) - 24;
+
+const COLORS = {
+  background: "#F7F5F2",
+  surface: "#FFFFFF",
+  primaryText: "#2C2826",
+  brandBrown: "#9A5B32",
+  mutedText: "#8A847D",
+  border: "#E5E0D8",
+  badgeBg: "#EFEFEF",
+};
 
 export default function Home() {
-  const { width } = useWindowDimensions();
-  const isLargeScreen = width >= 768;
-
-  const scrollRef = useSharedValue(0);
-  const scrollHandler = useScrollViewOffset(scrollRef);
+  const router = useRouter();
 
   const { data: products, isLoading } = useQuery<ProductResponseDTO[]>({
     queryKey: ["products"],
-    queryFn: async () => (await productsApi.getAll()).data,
+    queryFn: async () => {
+      const response = await productsApi.getAll();
+      const data = response.data as any;
+      return data.content || data;
+    },
+  });
+
+  const featuredProducts = products?.slice(0, 4) || [];
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
   });
 
   const heroAnimatedStyle = useAnimatedStyle(() => {
-    const translateY = interpolate(
-      scrollHandler.value,
-      [0, 1000],
-      [0, 400],
-      Extrapolate.CLAMP
-    );
-    const opacity = interpolate(
-      scrollHandler.value,
-      [0, 600],
-      [1, 0],
-      Extrapolate.CLAMP
-    );
     return {
-      transform: [{ translateY }],
-      opacity,
+      transform: [{ translateY: scrollY.value * 0.4 }],
+      opacity: interpolate(scrollY.value, [0, height * 0.5], [1, 0], Extrapolation.CLAMP),
     };
   });
 
-  const featuresBackgroundAnimatedStyle = useAnimatedStyle(() => {
-    const backgroundColor = interpolate(
-      scrollHandler.value,
-      [300, 600, 900, 1200],
-      [
-        0.97, // hsl(30, 25%, 97%)
-        0.95, // hsl(32, 28%, 95%)
-        0.93, // hsl(28, 20%, 93%)
-        0.97, // hsl(30, 25%, 97%)
-      ],
-      Extrapolate.CLAMP
-    );
-
+  const featuresAnimatedStyle = useAnimatedStyle(() => {
     return {
-      backgroundColor: `hsl(30, 25%, ${Math.round(backgroundColor * 100)}%)`,
+      transform: [{ translateY: interpolate(scrollY.value, [0, 250], [40, 0], Extrapolation.CLAMP) }],
+      opacity: interpolate(scrollY.value, [0, 200], [0.6, 1], Extrapolation.CLAMP),
     };
   });
 
-  const featuredProducts = products?.slice(0, 3) || [];
+  const productsHeaderStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: interpolate(scrollY.value, [200, 500], [30, 0], Extrapolation.CLAMP) }],
+      opacity: interpolate(scrollY.value, [200, 450], [0.3, 1], Extrapolation.CLAMP),
+    };
+  });
 
-  return (
-    <Animated.ScrollView
-      style={styles.container}
-      scrollEventThrottle={16}
-      onScroll={scrollHandler}
-      ref={scrollRef}
-    >
-      <View style={styles.heroSection}>
-        <Animated.View style={[styles.heroBackground, heroAnimatedStyle]}>
-          <View style={styles.heroOverlay} />
-          <Image
-            source={{ uri: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=2000" }}
-            style={styles.heroImage}
-          />
-        </Animated.View>
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* HERO */}
+      <View style={styles.heroWrapper}>
+        <Animated.Image
+          source={{ uri: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=2000' }}
+          style={[styles.heroImage, heroAnimatedStyle]}
+        />
+        <View style={styles.heroOverlay}>
+          <Animated.View entering={FadeInUp.duration(1000).delay(200)} style={styles.heroContent}>
+            <Text style={styles.heroLabel}>QUALIDADE EXCEPCIONAL</Text>
+            <Text style={styles.heroTitle}>O Grande Mestre</Text>
+            <Text style={styles.heroTitleItalic}>de Torra.</Text>
 
-        <View style={styles.heroContent}>
-          <Text style={styles.sectionLabel}>Exceptional Quality</Text>
-          <Text style={styles.heroTitle}>
-            The Grand Master
-            {"\n"}
-            <Text style={styles.heroTitleItalic}>of Roasting.</Text>
-          </Text>
-          <Text style={styles.heroDescription}>
-            Experience ethically sourced, meticulously roasted coffee delivered straight to your door. A ritual worth waking up for.
-          </Text>
+            <Text style={styles.heroSubtitle}>
+              Experimente café de origem ética, meticulosamente torrado, entregue diretamente na sua porta. Um ritual que vale a pena acordar para.
+            </Text>
 
-          <View style={[styles.heroButtons, !isLargeScreen && styles.heroButtonsMobile]}>
-            <Link href="/products" asChild>
-              <TouchableOpacity style={styles.heroButtonPrimary}>
-                <Text style={styles.heroButtonPrimaryText}>Shop Collection</Text>
-                <ArrowRight size={20} color="#FFFFFF" />
+            <View style={styles.heroButtonsRow}>
+              <TouchableOpacity
+                style={styles.btnPrimary}
+                onPress={() => router.push("/products")}
+              >
+                <Text style={styles.btnPrimaryText}>Coleção de Produtos</Text>
+                <ArrowRight size={18} color="#fff" />
               </TouchableOpacity>
-            </Link>
-            <Link href="/our-story" asChild>
-              <TouchableOpacity style={styles.heroButtonGhost}>
-                <Text style={styles.heroButtonGhostText}>Our Story</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-        </View>
 
-        <View style={styles.scrollIndicator}>
-          <Text style={styles.scrollText}>Scroll</Text>
-          <View style={styles.scrollLine} />
+              <TouchableOpacity 
+                onPress={() => router.push("/our-story")} 
+                style={styles.btnGhost}
+              >
+                <Text style={styles.btnGhostText}>Nossa História</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         </View>
       </View>
 
-      <Animated.View style={[styles.featuresSection, featuresBackgroundAnimatedStyle]}>
-        <View style={styles.contentWrapper}>
-          <View style={[styles.featuresGrid, !isLargeScreen && styles.featuresGridMobile]}>
-            {[
-              { icon: Leaf, title: "Ethically Sourced", desc: "Direct trade relationships with farmers ensuring fair wages and sustainable practices." },
-              { icon: Droplets, title: "Small Batch Roasted", desc: "Roasted weekly to order in our local facility to guarantee peak freshness and flavor." },
-              { icon: Coffee, title: "Perfectly Crafted", desc: "Curated profiles designed to highlight the unique terroir of every bean." },
-            ].map((feature, i) => (
-              <View key={i} style={styles.featureItem}>
-                <View style={styles.featureIconWrapper}>
-                  <feature.icon size={32} color="#6B4F4F" />
-                </View>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDescription}>{feature.desc}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+      {/* FEATURES */}
+      <Animated.View style={[styles.featuresSection, featuresAnimatedStyle]}>
+        {[
+          {
+            icon: Leaf,
+            title: "De Origem Ética",
+            desc: "Relações comerciais diretas com agricultores garantindo salários justos e práticas sustentáveis."
+          },
+          {
+            icon: Droplets,
+            title: "Torrado em Pequenos Lotes",
+            desc: "Torrado semanalmente sob encomenda para garantir frescor e sabor máximos."
+          },
+          {
+            icon: Coffee,
+            title: "Perfeitamente Feito",
+            desc: "Perfis curados projetados para destacar o terroir único de cada grão."
+          },
+        ].map((feature, index) => (
+          <Animated.View
+            key={index}
+            entering={FadeInUp.duration(800).delay(400 + (index * 150))}
+            style={styles.featureBlock}
+          >
+            <View style={styles.featureIconBox}>
+              <feature.icon size={28} color={COLORS.brandBrown} />
+            </View>
+            <Text style={styles.featureTitle}>{feature.title}</Text>
+            <Text style={styles.featureDesc}>{feature.desc}</Text>
+          </Animated.View>
+        ))}
       </Animated.View>
 
-      <View style={styles.featuredProductsSection}>
-        <View style={styles.contentWrapper}>
-          <View style={[styles.featuredProductsHeader, !isLargeScreen && styles.featuredProductsHeaderMobile]}>
-            <View style={styles.featuredProductsHeaderTextContainer}>
-              <Text style={styles.sectionLabel}>Fresh Offerings</Text>
-              <Text style={styles.sectionTitle}>Featured Roasts</Text>
-            </View>
-            <Link href="/products" asChild>
-              <TouchableOpacity style={styles.viewAllButton}>
-                <Text style={styles.viewAllButtonText}>View All Coffee</Text>
-                <ArrowRight size={20} color="#333333" />
-              </TouchableOpacity>
-            </Link>
-          </View>
+      {/* PRODUCTS HEADER */}
+      <Animated.View style={[styles.productsHeader, productsHeaderStyle]}>
+        <View>
+          <Text style={styles.sectionLabel}>OFERTAS FRESCAS</Text>
+          <Text style={styles.sectionTitle}>Torrados em Destaque</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
 
-          {isLoading ? (
-            <View style={[styles.productsGrid, !isLargeScreen && styles.productsGridMobile]}>
-              {[1, 2, 3].map((i) => (
-                <View key={i} style={styles.productCardPlaceholder} />
-              ))}
-            </View>
-          ) : (
-            <View style={[styles.productsGrid, !isLargeScreen && styles.productsGridMobile]}>
-              {featuredProducts.length > 0 ? (
-                featuredProducts.map((product, index) => (
-                  <ProductCard key={product.id} product={product} index={index} />
-                ))
-              ) : (
-                <View style={styles.noProductsMessage}>
-                  <Coffee size={48} color="#9CA3AF" style={styles.noProductsIcon} />
-                  <Text style={styles.noProductsText}>Our roasters are currently preparing the beans.</Text>
-                </View>
-              )}
+  const renderProduct = ({ item, index }: { item: ProductResponseDTO, index: number }) => (
+    <Animated.View entering={FadeInUp.duration(800).delay(index * 150)}>
+      <TouchableOpacity 
+        style={styles.cardContainer} 
+        activeOpacity={0.9}
+        onPress={() => router.push({ pathname: "/product-detail", params: { id: item.id } })}
+      >
+        <View style={styles.imageWrapper}>
+          {item.category && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.category.name}</Text>
             </View>
           )}
+          <Image
+            source={{ uri: item.imageUrl || 'https://via.placeholder.com/300x400' }}
+            style={styles.productImage}
+          />
         </View>
-      </View>
 
-      <Footer />
-    </Animated.ScrollView>
+        <View style={styles.cardContent}>
+          <Text style={styles.productName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.productDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
+          <Text style={styles.productPrice}>
+            {formatCurrency(item.price)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  return (
+    <View style={styles.container}>
+      {isLoading ? (
+        <ActivityIndicator animating={true} color={COLORS.brandBrown} style={styles.loader} />
+      ) : (
+        <AnimatedFlatList
+          data={featuredProducts}
+          renderItem={renderProduct}
+          keyExtractor={(item: any) => item.id.toString()}
+          numColumns={2}
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={<Footer />}
+          contentContainerStyle={styles.listPadding}
+          columnWrapperStyle={styles.columnWrapper}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB', // bg-background
-  },
-  heroSection: {
-    position: 'relative',
-    height: 700, // h-[95vh] ajustado para um valor fixo ou calculado
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  heroBackground: {
-    position: 'absolute',
-    inset: 0,
-    zIndex: 0,
-    width: '100%',
-    height: '100%',
-  },
-  heroOverlay: {
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)', // from-foreground/60
-    zIndex: 10,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  heroContent: {
-    position: 'relative',
-    zIndex: 10,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    maxWidth: 900, // max-w-5xl
-    marginTop: 64, // mt-16
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFD700', // text-primary
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 24, // mb-6
-    backgroundColor: 'rgba(0,0,0,0.4)', // drop-shadow-md
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  heroTitle: {
-    fontFamily: 'serif',
-    fontSize: 48, // text-5xl md:text-7xl lg:text-8xl
-    fontWeight: 'bold',
-    color: '#FFFFFF', // text-primary-foreground
-    marginBottom: 32, // mb-8
-    lineHeight: 56, // leading-[1.1]
-    textAlign: 'center',
-  },
-  heroTitleItalic: {
-    color: 'rgba(255, 255, 255, 0.9)', // text-primary-foreground/90
-    fontStyle: 'italic',
-  },
-  heroDescription: {
-    fontSize: 18, // text-lg md:text-xl
-    color: 'rgba(255, 255, 255, 0.8)', // text-primary-foreground/80
-    maxWidth: 600, // max-w-2xl
-    marginBottom: 48, // mb-12
-    fontWeight: '300', // font-light
-    lineHeight: 28, // leading-relaxed
-    textAlign: 'center',
-  },
-  heroButtons: {
-    flexDirection: 'column', // flex-col sm:flex-row
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16, // gap-4
-  },
-  heroButtonsMobile: {
-    width: '100%',
-  },
-  heroButtonPrimary: {
-    backgroundColor: '#6B4F4F', // btn-hero-primary
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 200, // w-full sm:w-auto
-  },
-  heroButtonPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  heroButtonGhost: {
-    backgroundColor: 'transparent', // btn-hero-ghost
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    minWidth: 200, // w-full sm:w-auto
-  },
-  heroButtonGhostText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  scrollIndicator: {
-    position: 'absolute',
-    bottom: 40, // bottom-10
-    left: '50%',
-    transform: [{ translateX: -25 }], // -translate-x-1/2
-    zIndex: 10,
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8, // gap-2
-  },
-  scrollText: {
-    fontSize: 12, // text-xs
-    textTransform: 'uppercase',
-    letterSpacing: 2, // tracking-widest
-    fontWeight: '600', // font-semibold
-    color: 'rgba(255, 255, 255, 0.6)', // text-primary-foreground/60
-  },
-  scrollLine: {
-    width: 1, // w-[1px]
-    height: 48, // h-12
-    backgroundColor: 'rgba(255, 255, 255, 0.6)', // bg-gradient-to-b from-primary-foreground/60 to-transparent
-  },
-  featuresSection: {
-    paddingVertical: 96, // py-24
-    position: 'relative',
-    zIndex: 20,
-  },
-  contentWrapper: {
-    maxWidth: 1120, // max-w-7xl
-    marginHorizontal: 'auto', // mx-auto
-    paddingHorizontal: 16, // px-4 sm:px-6 lg:px-8
-  },
-  featuresGrid: {
-    flexDirection: 'column', // grid grid-cols-1 md:grid-cols-3
-    gap: 48, // gap-12
-  },
-  featuresGridMobile: {
-    // Estilos específicos para mobile se necessário
-  },
-  featureItem: {
-    textAlign: 'center',
-    alignItems: 'center',
-  },
-  featureIconWrapper: {
-    width: 64, // w-16
-    height: 64, // h-16
-    marginHorizontal: 'auto', // mx-auto
-    marginBottom: 24, // mb-6
-    backgroundColor: '#F0EAD6', // bg-accent
-    borderRadius: 16, // rounded-2xl
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featureTitle: {
-    fontFamily: 'serif',
-    fontSize: 24, // text-2xl
-    fontWeight: 'bold',
-    marginBottom: 16, // mb-4
-    color: '#333333',
-  },
-  featureDescription: {
-    color: '#6B7280', // text-muted-foreground
-    lineHeight: 24, // leading-relaxed
-    textAlign: 'center',
-  },
-  featuredProductsSection: {
-    paddingVertical: 96, // py-24
-    backgroundColor: 'rgba(243, 244, 246, 0.3)', // bg-muted/30
-    position: 'relative',
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(229, 231, 235, 0.5)', // border-border/50
-  },
-  featuredProductsHeader: {
-    flexDirection: 'row', // flex-col md:flex-row
-    justifyContent: 'space-between',
-    alignItems: 'flex-end', // items-end
-    marginBottom: 64, // mb-16
-    gap: 24, // gap-6
-  },
-  featuredProductsHeaderMobile: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-  },
-  featuredProductsHeaderTextContainer: {
-    maxWidth: 800, // max-w-2xl
-  },
-  sectionTitle: {
-    fontFamily: 'serif',
-    fontSize: 36, // text-4xl md:text-5xl
-    fontWeight: 'bold',
-    color: '#333333', // text-foreground
-    marginTop: 8, // mt-2
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8, // gap-2
-    paddingBottom: 8, // pb-2
-    borderBottomWidth: 2,
-    borderColor: 'transparent',
-  },
-  viewAllButtonText: {
-    fontWeight: '600', // font-semibold
-    color: '#333333', // text-foreground
-    fontSize: 16,
-  },
-  productsGrid: {
-    flexDirection: 'column', // grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
-    gap: 32, // gap-8
-  },
-  productsGridMobile: {
-    // Estilos específicos para mobile se necessário
-  },
-  productCardPlaceholder: {
-    aspectRatio: 3 / 4, // aspect-[3/4]
-    backgroundColor: '#E5E7EB', // bg-muted
-    borderRadius: 16, // rounded-2xl
-    opacity: 0.7, // animate-pulse
-  },
-  noProductsMessage: {
-    flex: 1,
-    paddingVertical: 80, // py-20
-    backgroundColor: 'rgba(255, 255, 255, 0.8)', // glass-card
-    borderWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.5)', // border-dashed
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-  },
-  noProductsIcon: {
-    marginBottom: 16, // mb-4
-    opacity: 0.5,
-  },
-  noProductsText: {
-    fontSize: 20, // text-xl
-    color: '#6B7280', // text-muted-foreground
-    fontFamily: 'serif',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loader: { flex: 1, justifyContent: 'center' },
+  listPadding: { paddingBottom: 0 },
+  headerContainer: { backgroundColor: COLORS.background },
+
+  heroWrapper: { height: height * 0.85, overflow: 'hidden', position: 'relative' },
+  heroImage: { width: '100%', height: '100%', resizeMode: 'cover', position: 'absolute' },
+  heroOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  heroContent: { alignItems: 'center', marginTop: 40 },
+
+  heroLabel: { color: COLORS.brandBrown, fontSize: 11, fontWeight: 'bold', letterSpacing: 2, marginBottom: 16 },
+  heroTitle: { fontFamily: 'serif', fontSize: 46, fontWeight: 'bold', color: '#fff', textAlign: 'center', lineHeight: 52 },
+  heroTitleItalic: { fontFamily: 'serif', fontSize: 46, fontStyle: 'italic', color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 20 },
+  heroSubtitle: { color: 'rgba(255,255,255,0.85)', textAlign: 'center', fontSize: 16, lineHeight: 26, marginBottom: 36, paddingHorizontal: 10 },
+
+  heroButtonsRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  btnPrimary: { backgroundColor: COLORS.brandBrown, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 26, paddingVertical: 16, borderRadius: 12, gap: 8 },
+  btnPrimaryText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  btnGhost: { paddingHorizontal: 24, paddingVertical: 16 },
+  btnGhostText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+
+  featuresSection: { padding: 24, paddingTop: 60, paddingBottom: 40, gap: 40, backgroundColor: COLORS.background },
+  featureBlock: { alignItems: 'center' },
+  featureIconBox: { width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.badgeBg, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  featureTitle: { fontFamily: 'serif', fontSize: 22, fontWeight: 'bold', color: COLORS.primaryText, marginBottom: 10 },
+  featureDesc: { textAlign: 'center', color: COLORS.mutedText, fontSize: 15, lineHeight: 24, paddingHorizontal: 20 },
+
+  productsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 24, marginTop: 20, marginBottom: 32 },
+  sectionLabel: { color: COLORS.brandBrown, fontSize: 11, fontWeight: 'bold', letterSpacing: 1.5, marginBottom: 6 },
+  sectionTitle: { fontFamily: 'serif', fontSize: 32, fontWeight: 'bold', color: COLORS.primaryText },
+
+  columnWrapper: { justifyContent: 'space-between', paddingHorizontal: 16 },
+  cardContainer: { width: CARD_WIDTH, marginBottom: 32, backgroundColor: COLORS.background },
+  imageWrapper: { width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', marginBottom: 16, backgroundColor: COLORS.border },
+  productImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  badge: { position: 'absolute', top: 12, left: 12, backgroundColor: COLORS.badgeBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, zIndex: 10 },
+  badgeText: { fontSize: 10, fontWeight: 'bold', color: COLORS.primaryText, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardContent: { paddingHorizontal: 4 },
+  productName: { fontFamily: 'serif', fontSize: 18, fontWeight: 'bold', color: COLORS.primaryText, marginBottom: 6 },
+  productDescription: { fontSize: 13, color: COLORS.mutedText, lineHeight: 18, marginBottom: 10 },
+  productPrice: { fontSize: 16, fontWeight: 'bold', color: COLORS.brandBrown },
 });
